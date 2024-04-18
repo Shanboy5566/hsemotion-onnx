@@ -34,16 +34,27 @@ class HSEmotionRecognizer:
         else:
             self.idx_to_class={0: 'Anger', 1: 'Contempt', 2: 'Disgust', 3: 'Fear', 4: 'Happiness', 5: 'Neutral', 6: 'Sadness', 7: 'Surprise'}
 
-        self.img_size=224 if '_b0_' in model_name else 260
+        if 'mbf_' in model_name:
+            self.mean=[0.5, 0.5, 0.5]
+            self.std=[0.5, 0.5, 0.5]
+            self.img_size=112
+        else:
+            self.mean=[0.485, 0.456, 0.406]
+            self.std=[0.229, 0.224, 0.225]
+            if '_b2_' in model_name:
+                self.img_size=260
+            elif 'ddamfnet' in model_name:
+                self.img_size=112
+            else:
+                self.img_size=224
         
         path=get_model_path(model_name)
         self.ort_session = ort.InferenceSession(path,providers=['CPUExecutionProvider'])
     
     def preprocess(self,img):
         x=cv2.resize(img,(self.img_size,self.img_size))/255
-        x[..., 0] = (x[..., 0]-0.485)/0.229
-        x[..., 1] = (x[..., 1]-0.456)/0.224
-        x[..., 2] = (x[..., 2]-0.406)/0.225
+        for i in range(3):
+            x[..., i] = (x[..., i]-self.mean[i])/self.std[i]
         return x.transpose(2, 0, 1).astype("float32")[np.newaxis,...]
 
     def predict_emotions(self,face_img, logits=True):
