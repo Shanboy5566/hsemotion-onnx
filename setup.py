@@ -4,7 +4,9 @@ requirements = [
     'numpy',
     'opencv-python',
     'onnx',
-    'onnxruntime'
+    'onnxruntime',
+    'fastapi',
+    'uvicorn'
 ]
 setup(
     name='hsemotion-onnx',
