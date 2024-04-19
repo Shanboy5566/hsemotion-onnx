@@ -20,6 +20,13 @@ It is also possible to install it via pip:
 
 ## Usage
 
+### Test RTSP stream
+
+```
+python hsemotion_onnx/check_rtsp_with_opencv.py --url rtsp://b03773d78e34.entrypoint.cloud.wowza.com:1935/app-4065XT4Z/80c76e59_stream1
+
+```
+
 ### FastAPI
 
 開啟fastapi
