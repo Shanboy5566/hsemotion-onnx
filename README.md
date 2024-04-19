@@ -15,11 +15,53 @@ The code of HSEmotionONNX Python Library is released under the Apache-2.0 Licens
 
 It is also possible to install it via pip:
 ```
-    pip install hsemotion-onnx
+    pip install -e .
+```
+
+## Usage
+
+### FastAPI
+
+開啟fastapi
+
+```
+cd api
+uvicorn main:app --reload
+```
+
+swagger ui
+
+```
+http://127.0.0.1:8000/docs
+```
+
+- check video stream (webcam)
+
+```
+curl -X 'GET' \
+  'http://127.0.0.1:8000/check_video_stream?video_type=webcam' \
+  -H 'accept: application/json'
 ```
 
 
-## Usage
+- check video stream (rtsp)
+
+```
+curl -X 'GET' \
+  'http://127.0.0.1:8000/check_video_stream?video_type=rtsp&video_url=rtsp%3A%2F%2Fb03773d78e34.entrypoint.cloud.wowza.com%3A1935%2Fapp-4065XT4Z%2F80c76e59_stream1' \
+  -H 'accept: application/json'
+```
+
+- get facial emotion (webcam)
+
+```
+curl -X 'GET' \
+  'http://127.0.0.1:8000/face_detection?video_type=webcam&skip_frame=1' \
+  -H 'accept: application/json'
+```
+
+
+### hsemotion_onnx part
 
 ```
     from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
@@ -47,3 +89,15 @@ The versions of this method for a batch of images are also available
 Complete usage examples are available in the [demo folder](demo). It is necessary to install [mediapipe](https://google.github.io/mediapipe/) to run the demo script.
 
 The details about training of the models are available in the [main repository](https://github.com/HSE-asavchenko/face-emotion-recognition)
+
+
+## TODO
+
+- [x] Add FastAPI
+- [x] Support full-range face detection model
+- [x] Add support for webcam stream
+- [x] Add support for RTSP video stream
+- [ ] Check RTSP protocol in OpenCV 
+- [ ] Add Dockerfile
+- [ ] Return emotion and score in FastAPI
+- [ ] Add emotion normalization

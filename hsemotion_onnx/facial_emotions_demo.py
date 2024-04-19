@@ -12,7 +12,7 @@ model_name='enet_b0_8_best_vgaf'
 
 emotion_recognizer = HSEmotionRecognizer(model_name=model_name)
 
-def process_video(video_source, parameter, k=1):
+def process_video(video_source, parameter, skip_frame=1):
     if video_source == 'webcam':
         cap = cv2.VideoCapture(0)
     elif video_source == 'file':
@@ -38,7 +38,7 @@ def process_video(video_source, parameter, k=1):
                 continue
 
             frame_count += 1
-            if frame_count % k != 0:
+            if frame_count % skip_frame != 0:
                 continue
 
             # To improve performance, optionally mark the image as not writeable to
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process video with emotion detection.')
     parser.add_argument('--file', help='Path to video file')
     parser.add_argument('--rtsp-url', help='RTSP URL')
-    parser.add_argument('--k', type=int, default=1, help='Number of frames to skip before processing each frame')
+    parser.add_argument('--skip-frame', type=int, default=1, help='Number of frames to skip before processing each frame')
     args = parser.parse_args()
 
     if args.file:
@@ -93,4 +93,4 @@ if __name__ == '__main__':
     elif args.rtsp_url:
         process_video('rtsp', args.rtsp_url, args.k)
     else:
-        process_video('webcam', None, args.k)
+        process_video('webcam', None, args.skip_frame)
