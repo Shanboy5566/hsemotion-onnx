@@ -47,7 +47,7 @@ python hsemotion_onnx/facial_emotions_demo.py
 **注意**：可以使用`--skip-frame`參數來跳過幾個frame
 
 ```
-python hsemotion_onnx/facial_emotions_demo.py --rtsp-url rtsp://simplenoodle:kris0226@192.168.1.11:554/Streaming/Channels/101 --skip-frame 2
+python hsemotion_onnx/facial_emotions_demo.py --rtsp-url rtsp://simplenoodle:######@192.168.1.xx:yyy/Streaming/Channels/101 --skip-frame 2
 ```
 
 - 使用RTSP串流 (多個)
