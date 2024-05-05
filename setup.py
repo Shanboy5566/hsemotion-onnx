@@ -20,4 +20,5 @@ setup(
     description='HSEmotionONNX Python Library for Facial Emotion Recognition',
     keywords=['face expression recognition', 'emotion analysis', 'facial expressions'],
     install_requires=requirements,
+    python_requires='>=3.9',
 )
