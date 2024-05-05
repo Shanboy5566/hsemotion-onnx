@@ -22,10 +22,32 @@ It is also possible to install it via pip:
 
 ### Test RTSP stream
 
+檢查RTSP串流是否正常
+
 ```
 python hsemotion_onnx/check_rtsp_with_opencv.py --url rtsp://b03773d78e34.entrypoint.cloud.wowza.com:1935/app-4065XT4Z/80c76e59_stream1
 
 ```
+
+### Emotion Recognition
+
+- 使用webcam
+
+```
+python hsemotion_onnx/facial_emotions_demo.py
+```
+
+- 使用RTSP串流 (單個)
+
+**注意**：可以使用`--skip-frame`參數來跳過幾個frame
+
+```
+python hsemotion_onnx/facial_emotions_demo.py --rtsp-url rtsp://simplenoodle:kris0226@192.168.1.11:554/Streaming/Channels/101 --skip-frame 2
+```
+
+- 使用RTSP串流 (多個)
+
+TODO
 
 ### FastAPI
 
