@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import argparse
+import time
 
 mp_face_detection = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
@@ -29,7 +30,8 @@ def process_video(video_source, parameter, skip_frame=1):
 
     # model selection: 0 for short-range model (2 meters), 1 for full-range model (5 meters)
     with mp_face_detection.FaceDetection(
-        model_selection=1, min_detection_confidence=0.5) as face_detection:
+        # min_detection_confidence=0.25 for hat detection
+        model_selection=1, min_detection_confidence=0.25) as face_detection:
         frame_count = 0
         while cap.isOpened():
             success, image = cap.read()
@@ -66,7 +68,7 @@ def process_video(video_source, parameter, skip_frame=1):
                     # crop face image
                     face_img = image[y:y+h, x:x+w]
 
-                    emotion_recognizer = HSEmotionRecognizer(model_name='enet_b0_8_best_vgaf')
+
                     emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
                     emotion = np.argmax(scores)
                     emotion = emotion_recognizer.idx_to_class[emotion]
@@ -75,9 +77,9 @@ def process_video(video_source, parameter, skip_frame=1):
                     fontScale = 2
                     min_y = y if y >= 0 else 10
                     cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale, color=(0,255,0), thickness=3)
-                cv2.imshow('MediaPipe Face Detection', image)
             if cv2.waitKey(5) & 0xFF == 27:
                 break
+            cv2.imshow('MediaPipe Face Detection', image)
 
     cap.release()
 
@@ -89,8 +91,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.file:
-        process_video('file', args.file, args.k)
+        process_video('file', args.file, args.skip_frame)
     elif args.rtsp_url:
-        process_video('rtsp', args.rtsp_url, args.k)
+        process_video('rtsp', args.rtsp_url, args.skip_frame)
     else:
         process_video('webcam', None, args.skip_frame)
