@@ -7,6 +7,11 @@
 
 The code of HSEmotionONNX Python Library is released under the Apache-2.0 License. There is no limitation for both academic and commercial usage.
 
+## Prerequisites
+
+- python>=3.9
+
+
 ## Installing
 
 ```
