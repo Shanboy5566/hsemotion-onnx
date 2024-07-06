@@ -131,7 +131,7 @@ The details about training of the models are available in the [main repository](
 - [x] Support full-range face detection model
 - [x] Add support for webcam stream
 - [x] Add support for RTSP video stream
-- [ ] Check RTSP protocol in OpenCV 
-- [ ] Add Dockerfile
-- [ ] Return emotion and score in FastAPI
+- [x] Check RTSP protocol in OpenCV 
+- [x] Add Dockerfile
+- [x] Return emotion and score in FastAPI
 - [ ] Add emotion normalization
