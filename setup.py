@@ -6,7 +6,9 @@ requirements = [
     'onnx',
     'onnxruntime',
     'fastapi',
-    'uvicorn'
+    'uvicorn',
+    'mediapipe',
+    'pymongo'
 ]
 setup(
     name='hsemotion-onnx',

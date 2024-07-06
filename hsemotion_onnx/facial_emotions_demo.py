@@ -3,6 +3,11 @@ import mediapipe as mp
 import numpy as np
 import argparse
 import time
+from collections import deque
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 mp_face_detection = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
@@ -13,7 +18,10 @@ model_name='enet_b0_8_best_vgaf'
 
 emotion_recognizer = HSEmotionRecognizer(model_name=model_name)
 
-def process_video(video_source, parameter, skip_frame=1):
+maxlen=15 #51
+recent_scores=deque(maxlen=maxlen)
+
+def process_video(video_source, parameter, skip_frame=1, timeout=None):
     if video_source == 'webcam':
         cap = cv2.VideoCapture(0)
     elif video_source == 'file':
@@ -21,35 +29,35 @@ def process_video(video_source, parameter, skip_frame=1):
     elif video_source == 'rtsp':
         cap = cv2.VideoCapture(parameter)
     else:
-        print("Error: Invalid video source.")
+        logger.error("Error: Invalid video source.")
         return
 
     if not cap.isOpened():
-        print(f"Error: Could not open {video_source} stream.")
+        logger.error(f"Error: Could not open {video_source} stream.")
         return
 
-    # model selection: 0 for short-range model (2 meters), 1 for full-range model (5 meters)
+    start = time.time()
     with mp_face_detection.FaceDetection(
-        # min_detection_confidence=0.25 for hat detection
         model_selection=1, min_detection_confidence=0.25) as face_detection:
         frame_count = 0
         while cap.isOpened():
             success, image = cap.read()
             if not success:
-                print("Ignoring empty camera frame.")
+                logger.error("Ignoring empty camera frame.")
                 continue
+
+            if time.time() - start > timeout:
+                logger.info(f"Timeout reached. Stopping video processing.")
+                break
 
             frame_count += 1
             if frame_count % skip_frame != 0:
                 continue
 
-            # To improve performance, optionally mark the image as not writeable to
-            # pass by reference.
             image.flags.writeable = False
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             results = face_detection.process(image)
 
-            # Draw the face detection annotations on the image.
             image.flags.writeable = True
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             if results.detections:
@@ -68,16 +76,19 @@ def process_video(video_source, parameter, skip_frame=1):
                     # crop face image
                     face_img = image[y:y+h, x:x+w]
 
-
                     emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
+                    recent_scores.append(scores)
+                    recent_scores_avg=np.mean(recent_scores,axis=0)
+
                     emotion = np.argmax(scores)
                     emotion = emotion_recognizer.idx_to_class[emotion]
 
-                    cv2.rectangle(image, (x,y), (x+w,y+h), (0, 255, 0), 2)
+                    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
                     fontScale = 2
                     min_y = y if y >= 0 else 10
-                    cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale, color=(0,255,0), thickness=3)
-            if cv2.waitKey(5) & 0xFF == 27:
+                    cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale, color=(0, 255, 0), thickness=3)
+            
+            if cv2.waitKey(5) & 0xFF == ord("q"):
                 break
             cv2.imshow('MediaPipe Face Detection', image)
 
@@ -88,11 +99,12 @@ if __name__ == '__main__':
     parser.add_argument('--file', help='Path to video file')
     parser.add_argument('--rtsp-url', help='RTSP URL')
     parser.add_argument('--skip-frame', type=int, default=1, help='Number of frames to skip before processing each frame')
+    parser.add_argument('--timeout', type=int, default=9999999, help='Timeout in seconds to stop video processing')
     args = parser.parse_args()
 
     if args.file:
-        process_video('file', args.file, args.skip_frame)
+        process_video('file', args.file, args.skip_frame, args.timeout)
     elif args.rtsp_url:
-        process_video('rtsp', args.rtsp_url, args.skip_frame)
+        process_video('rtsp', args.rtsp_url, args.skip_frame, args.timeout)
     else:
-        process_video('webcam', None, args.skip_frame)
+        process_video('webcam', None, args.skip_frame, args.timeout)
