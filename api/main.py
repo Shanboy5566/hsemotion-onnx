@@ -18,42 +18,46 @@ class EmotionRequest(BaseModel):
     skip_frame: int = 1
     timeout: int = 99999
     window_size: int = 5
+    buffer_size: int = 10
     write_db: bool = False
     show: bool = False
     id: str = None
 
-# Function to check if webcam or RTSP stream connection is valid
-def check_video_stream(video_type: str, video_url: str):
-    cap = None
-    if video_type == 'webcam':
-        cap = cv2.VideoCapture(0)
-    elif video_type == 'rtsp':
-        if video_url is None:
-            raise HTTPException(status_code=400, detail="RTSP stream requires video_url parameter")
-        cap = cv2.VideoCapture(video_url)
-    else:
-        raise HTTPException(status_code=400, detail="Invalid video source")
+def check_video_stream(video_type: str, video_urls: list):
+    for video_url in video_urls:
+        print(video_url)
+        cap = None
+        if video_type == 'webcam':
+            cap = cv2.VideoCapture(video_url)
+        elif video_type == 'rtsp':
+            if video_url is None:
+                raise HTTPException(status_code=400, detail="RTSP stream requires video_url parameter")
+            cap = cv2.VideoCapture(video_url)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid video source")
 
-    if not cap.isOpened():
-        raise HTTPException(status_code=404, detail=f"Could not open {video_type} stream")
+        if not cap.isOpened():
+            raise HTTPException(status_code=404, detail=f"Could not open {video_type} stream")
 
-    cap.release()
-
-@app.get("/check_video_stream")
-async def check_video_stream_api(video_type: str, video_url: str = None):
-    try:
-        check_video_stream(video_type, video_url)
-        return {"status": "success", "message": f"{video_type} stream is valid"}
-    except HTTPException as e:
-        return {"status": "error", "message": str(e)}
+        cap.release()
 
 def start_face_detection(request: EmotionRequest, uuid: str):
-    check_video_stream(request.video_type, request.video_url)
+    video_urls = request.video_url.split(',') if request.video_type != "webcam" else [0]
+    check_video_stream(request.video_type, video_urls)
+    processes = []
     if request.video_type == 'webcam':
-        process = multiprocessing.Process(target=process_video, args=(None, 0, request.skip_frame, request.timeout, uuid, request.window_size, request.write_db, request.show))
+        process = multiprocessing.Process(target=process_video, args=(None, 0, request.skip_frame, request.timeout, uuid, request.window_size, request.buffer_size, request.write_db, request.show))
+        processes.append(process)
     else:
-        process = multiprocessing.Process(target=process_video, args=(request.video_url, None, request.skip_frame, request.timeout, uuid, request.window_size, request.write_db, request.show))
-    process.start()
+        for video_url in video_urls:
+            process = multiprocessing.Process(target=process_video, args=(video_url, None, request.skip_frame, request.timeout, uuid, request.window_size, request.buffer_size, request.write_db, request.show))
+            processes.append(process)
+    
+    for process in processes:
+        process.start()
+
+    for process in processes:
+        process.join()
 
 @app.post("/face_detection")
 async def face_detection_api(request: EmotionRequest, background_tasks: BackgroundTasks):
