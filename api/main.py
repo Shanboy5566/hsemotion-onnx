@@ -3,6 +3,7 @@ from pydantic import BaseModel
 import cv2
 import multiprocessing
 import uuid
+from typing import List
 from pymongo import MongoClient
 from hsemotion_onnx.facial_emotions_demo_multi import process_video
 from hsemotion_onnx.config import config
@@ -14,7 +15,7 @@ db = client.emotion_db
 
 class EmotionRequest(BaseModel):
     video_type: str = "webcam"
-    video_url: str = None
+    video_url: List = ["rtsp urls"]
     skip_frame: int = 1
     timeout: int = 99999
     window_size: int = 5
@@ -41,7 +42,7 @@ def check_video_stream(video_type: str, video_urls: list):
         cap.release()
 
 def start_face_detection(request: EmotionRequest, uuid: str):
-    video_urls = request.video_url.split(',') if request.video_type != "webcam" else [0]
+    video_urls = request.video_url if request.video_type != "webcam" else [0]
     check_video_stream(request.video_type, video_urls)
     processes = []
     if request.video_type == 'webcam':
