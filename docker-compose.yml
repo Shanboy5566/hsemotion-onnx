@@ -9,20 +9,5 @@ services:
     volumes:
       - mongo_data:/data/db
 
-  fastapi:
-    build: .
-    container_name: fastapi
-    ports:
-      - "8000:8000"
-    environment:
-      MODEL_NAME: "enet_b0_8_best_vgaf"
-      MONGO_URL: "mongodb://mongodb:27017"
-      SKIP_FRAME: "1"
-      TIMEOUT: "999999"
-      WINDOW_SIZE: "5"
-      BUFFER_SIZE: "10"
-    depends_on:
-      - mongodb
-
 volumes:
   mongo_data:
