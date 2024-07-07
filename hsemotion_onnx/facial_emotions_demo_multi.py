@@ -43,7 +43,7 @@ def process_video(rtsp_url=None,
         write_db (bool, optional): Whether to write the emotion data to a database. Defaults to False.
         show (bool, optional): Whether to display the video stream with bounding boxes and emotion labels. Defaults to False.
     """
-    
+     
     if uuid_str is None:
         uuid_str = str(uuid.uuid4())
 
