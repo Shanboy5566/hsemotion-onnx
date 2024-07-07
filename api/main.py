@@ -25,7 +25,6 @@ class EmotionRequest(BaseModel):
 
 def check_video_stream(video_type: str, video_urls: list):
     for video_url in video_urls:
-        print(video_url)
         cap = None
         if video_type == 'webcam':
             cap = cv2.VideoCapture(video_url)
