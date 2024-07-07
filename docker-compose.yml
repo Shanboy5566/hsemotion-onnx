@@ -20,6 +20,7 @@ services:
       SKIP_FRAME: "1"
       TIMEOUT: "999999"
       WINDOW_SIZE: "5"
+      BUFFER_SIZE: "10"
     depends_on:
       - mongodb
 
