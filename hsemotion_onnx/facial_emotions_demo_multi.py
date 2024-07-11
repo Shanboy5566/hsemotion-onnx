@@ -44,15 +44,7 @@ def process_video(rtsp_url=None,
 
     print(f"Connection established for {'webcam' if webcam else rtsp_url}")
 
-    if command_queue:
-        command = command_queue.get()
-        if command != 'start':
-            print(f"Invalid command received: {command}")
-            cap.release()
-            return
-
-    print(f"Command received: start for {'webcam' if webcam else rtsp_url}")
-
+    start_detection = False
     emotion_queue = deque(maxlen=window_size)
     emotion_buffer = []
 
@@ -70,63 +62,73 @@ def process_video(rtsp_url=None,
                 continue
 
             frame_count += 1
-            if frame_count % skip_frame != 0:
-                continue
 
-            image.flags.writeable = False
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            results = face_detection.process(image)
+            if not start_detection:
+                if command_queue and not command_queue.empty():
+                    command = command_queue.get()
+                    if command == 'start':
+                        start_detection = True
+                    else:
+                        print(f"Invalid command received: {command}")
+                        cap.release()
+                        return
+            else:
+                if frame_count % skip_frame == 0:
+                    image.flags.writeable = False
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    results = face_detection.process(image)
 
-            image.flags.writeable = True
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            if results.detections:
-                for detection in results.detections:
-                    bboxC = detection.location_data.relative_bounding_box
-                    ih, iw, _ = image.shape
-                    x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
-                                 int(bboxC.width * iw), int(bboxC.height * ih)
+                    image.flags.writeable = True
+                    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                    if results.detections:
+                        for detection in results.detections:
+                            bboxC = detection.location_data.relative_bounding_box
+                            ih, iw, _ = image.shape
+                            x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
+                                         int(bboxC.width * iw), int(bboxC.height * ih)
 
-                    x = max(0, x)
-                    y = max(0, y)
-                    w = min(iw - x, w)
-                    h = min(ih - y, h)
+                            x = max(0, x)
+                            y = max(0, y)
+                            w = min(iw - x, w)
+                            h = min(ih - y, h)
 
-                    face_img = image[y:y + h, x:x + w]
+                            face_img = image[y:y + h, x:x + w]
 
-                    emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
-                    emotion = np.argmax(scores)
-                    emotion = emotion_recognizer.idx_to_class[emotion]
-                    emotion_queue.append(scores)
+                            emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
+                            emotion = np.argmax(scores)
+                            emotion = emotion_recognizer.idx_to_class[emotion]
+                            emotion_queue.append(scores)
+
+                            if show:
+                                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                                fontScale = 2
+                                min_y = y if y >= 0 else 10
+                                cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
+                                            color=(0, 255, 0), thickness=3)
+
+                    if len(emotion_queue) == window_size:
+                        avg_scores = np.mean(emotion_queue, axis=0)
+                        avg_emotion = np.argmax(avg_scores)
+                        avg_emotion = emotion_recognizer.idx_to_class[avg_emotion]
+                        timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+                        emotion_buffer.append({
+                            "uuid": uuid_str,
+                            "timestamp": timestamp,
+                            "emotion": avg_emotion,
+                            "scores": avg_scores.tolist()
+                        })
+
+                        if write_db and len(emotion_buffer) >= buffer_size:
+                            # Save to MongoDB
+                            db.emotions.insert_many(emotion_buffer)
+                            emotion_buffer = []
 
                     if show:
-                        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                        fontScale = 2
-                        min_y = y if y >= 0 else 10
-                        cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
-                                    color=(0, 255, 0), thickness=3)
+                        cv2.imshow(f'Face Detection - {"webcam" if webcam else rtsp_url}', image)
+                        if cv2.waitKey(5) & 0xFF == ord("q"):
+                            break
 
-            if len(emotion_queue) == window_size:
-                avg_scores = np.mean(emotion_queue, axis=0)
-                avg_emotion = np.argmax(avg_scores)
-                avg_emotion = emotion_recognizer.idx_to_class[avg_emotion]
-                timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-
-                emotion_buffer.append({
-                    "uuid": uuid_str,
-                    "timestamp": timestamp,
-                    "emotion": avg_emotion,
-                    "scores": avg_scores.tolist()
-                })
-
-                if write_db and len(emotion_buffer) >= buffer_size:
-                    # Save to MongoDB
-                    db.emotions.insert_many(emotion_buffer)
-                    emotion_buffer = []
-
-            if show:
-                cv2.imshow(f'Face Detection - {"webcam" if webcam else rtsp_url}', image)
-                if cv2.waitKey(5) & 0xFF == ord("q"):
-                    break
     cap.release()
     if show:
         cv2.destroyAllWindows()
