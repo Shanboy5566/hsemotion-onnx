@@ -1,7 +1,6 @@
 import cv2
 import mediapipe as mp
 import numpy as np
-import argparse
 import time
 import multiprocessing
 import uuid
@@ -28,22 +27,8 @@ def process_video(rtsp_url=None,
                   window_size=config.WINDOW_SIZE, 
                   buffer_size=config.BUFFER_SIZE,
                   write_db=False, 
-                  show=False):
-    """
-    Process a video stream to detect facial emotions.
-
-    Args:
-        rtsp_url (str, optional): The RTSP URL of the video stream. Defaults to None.
-        webcam (int, optional): The index of the webcam to use. Defaults to None.
-        skip_frame (int, optional): The number of frames to skip between detections. Defaults to config.SKIP_FRAME.
-        timeout (int, optional): The maximum time in seconds to process the video stream. Defaults to config.TIMEOUT.
-        uuid_str (str, optional): The UUID string to identify the video stream. Defaults to None.
-        window_size (int, optional): The size of the emotion queue window. Defaults to config.WINDOW_SIZE.
-        buffer_size (int, optional): The size of the emotion buffer. Defaults to config.BUFFER_SIZE.
-        write_db (bool, optional): Whether to write the emotion data to a database. Defaults to False.
-        show (bool, optional): Whether to display the video stream with bounding boxes and emotion labels. Defaults to False.
-    """
-     
+                  show=False,
+                  command_queue=None):
     if uuid_str is None:
         uuid_str = str(uuid.uuid4())
 
@@ -57,9 +42,20 @@ def process_video(rtsp_url=None,
         print(f"Error: Couldn't open {'webcam' if webcam else rtsp_url}")
         return
 
+    print(f"Connection established for {'webcam' if webcam else rtsp_url}")
+
+    if command_queue:
+        command = command_queue.get()
+        if command != 'start':
+            print(f"Invalid command received: {command}")
+            cap.release()
+            return
+
+    print(f"Command received: start for {'webcam' if webcam else rtsp_url}")
+
     emotion_queue = deque(maxlen=window_size)
     emotion_buffer = []
-    
+
     with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.25) as face_detection:
         start_time = time.time()
         frame_count = 0
@@ -134,7 +130,7 @@ def process_video(rtsp_url=None,
     cap.release()
     if show:
         cv2.destroyAllWindows()
-    
+
     if write_db and emotion_buffer:
         # Save remaining data to MongoDB
         db.emotions.insert_many(emotion_buffer)
