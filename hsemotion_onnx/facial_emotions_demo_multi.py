@@ -22,19 +22,16 @@ db = client.emotion_db
 def process_video(rtsp_url=None, 
                   webcam=None, 
                   skip_frame=config.SKIP_FRAME, 
-                  timeout=config.TIMEOUT, 
-                  uuid_str=None, 
                   window_size=config.WINDOW_SIZE, 
                   buffer_size=config.BUFFER_SIZE,
                   write_db=False, 
                   show=False,
                   command_queue=None):
-    if uuid_str is None:
-        uuid_str = str(uuid.uuid4())
 
     cap = None
     if webcam is not None:
         cap = cv2.VideoCapture(webcam)
+        webcam = "0"
     else:
         cap = cv2.VideoCapture(rtsp_url)
 
@@ -44,6 +41,7 @@ def process_video(rtsp_url=None,
 
     print(f"Connection established for {'webcam' if webcam else rtsp_url}")
 
+    timeout = 999999
     start_detection = False
     emotion_queue = deque(maxlen=window_size)
     emotion_buffer = []
@@ -54,7 +52,10 @@ def process_video(rtsp_url=None,
         while cap.isOpened():
             if time.time() - start_time > timeout:
                 print(f"Timeout reached for {'webcam' if webcam else rtsp_url}")
-                break
+                start_detection = False
+                timeout = 999999
+                if show:
+                    cv2.destroyAllWindows()
 
             success, image = cap.read()
             if not success:
@@ -65,9 +66,12 @@ def process_video(rtsp_url=None,
 
             if not start_detection:
                 if command_queue and not command_queue.empty():
-                    command = command_queue.get()
+                    command, timeout, uuid_str = command_queue.get()
+                    print(f"Received command: {command}, timeout: {timeout}, uuid: {uuid_str}")
                     if command == 'start':
                         start_detection = True
+                        start_time = time.time()
+                        print(f"start: {start_time}, timeout: {timeout}")
                     else:
                         print(f"Invalid command received: {command}")
                         cap.release()

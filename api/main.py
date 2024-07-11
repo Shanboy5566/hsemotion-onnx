@@ -13,6 +13,7 @@ app = FastAPI()
 client = MongoClient(config.MONGO_URL)
 db = client.emotion_db
 
+id = str(uuid.uuid4())
 processes = {}
 commands = {}
 
@@ -20,12 +21,10 @@ class EmotionRequest(BaseModel):
     video_type: str = "webcam"
     video_url: List[str] = ["rtsp urls"]
     skip_frame: int = 1
-    timeout: int = 99999
     window_size: int = 5
     buffer_size: int = 10
     write_db: bool = False
     show: bool = False
-    id: str = None
 
 def check_video_stream(video_type: str, video_urls: list):
     for video_url in video_urls:
@@ -44,14 +43,14 @@ def check_video_stream(video_type: str, video_urls: list):
 
         cap.release()
 
-def start_connection(video_type: str, video_urls: List[str], skip_frame: int, timeout: int, uuid: str, window_size: int, buffer_size: int, write_db: bool, show: bool, command_queue_list: list):
+def start_connection(video_type: str, video_urls: List[str], skip_frame: int, window_size: int, buffer_size: int, write_db: bool, show: bool, command_queue_list: list):
     processes = []
     if video_type == 'webcam':
-        process = multiprocessing.Process(target=process_video, args=(None, 0, skip_frame, timeout, uuid, window_size, buffer_size, write_db, show, command_queue_list[0]))
+        process = multiprocessing.Process(target=process_video, args=(None, 0, skip_frame, window_size, buffer_size, write_db, show, command_queue_list[0]))
         processes.append(process)
     else:
         for i, video_url in enumerate(video_urls):
-            process = multiprocessing.Process(target=process_video, args=(video_url, None, skip_frame, timeout, uuid, window_size, buffer_size, write_db, show, command_queue_list[i]))
+            process = multiprocessing.Process(target=process_video, args=(video_url, None, skip_frame, window_size, buffer_size, write_db, show, command_queue_list[i]))
             processes.append(process)
     
     for process in processes:
@@ -63,25 +62,24 @@ def start_connection(video_type: str, video_urls: List[str], skip_frame: int, ti
 @app.post("/init_connection")
 async def init_connection_api(request: EmotionRequest, background_tasks: BackgroundTasks):
     try:
-        id = request.id if request.id is not None else str(uuid.uuid4())
         video_urls = request.video_url if request.video_type != "webcam" else [0]
         
         command_queue = [multiprocessing.Queue() for _ in range(len(video_urls))]
         commands[id] = command_queue
-        background_tasks.add_task(start_connection, request.video_type, video_urls, request.skip_frame, request.timeout, id, request.window_size, request.buffer_size, request.write_db, request.show, command_queue)
+        background_tasks.add_task(start_connection, request.video_type, video_urls, request.skip_frame, request.window_size, request.buffer_size, request.write_db, request.show, command_queue)
         
         return {"status": "success", "message": "Face detection process started", "uuid": id}
     except HTTPException as e:
         return {"status": "error", "message": str(e)}
 
 @app.post("/face_detection")
-async def face_detection_api(uuid: str):
+async def face_detection_api(uuid: str, timeout: int = 99999):
     try:
-        if uuid not in commands:
-            raise HTTPException(status_code=404, detail="UUID not found")
-        command_queue_list = commands[uuid]
+        # if uuid not in commands:
+        #     raise HTTPException(status_code=404, detail="UUID not found")
+        command_queue_list = commands[id]
         for command_queue in command_queue_list:
-            command_queue.put('start')
+            command_queue.put(['start', timeout, uuid])
         return {"status": "success", "message": "Face emotion detection started"}
     except HTTPException as e:
         return {"status": "error", "message": str(e)}
