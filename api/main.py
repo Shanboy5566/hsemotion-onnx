@@ -26,6 +26,10 @@ class EmotionRequest(BaseModel):
     write_db: bool = False
     show: bool = False
 
+class FaceRequest(BaseModel):
+    uuid: str = "uuid"
+    timeout: int = 999999
+
 def check_video_stream(video_type: str, video_urls: list):
     for video_url in video_urls:
         cap = None
@@ -73,13 +77,11 @@ async def init_connection_api(request: EmotionRequest, background_tasks: Backgro
         return {"status": "error", "message": str(e)}
 
 @app.post("/face_detection")
-async def face_detection_api(uuid: str, timeout: int = 99999):
+async def face_detection_api(request: FaceRequest):
     try:
-        # if uuid not in commands:
-        #     raise HTTPException(status_code=404, detail="UUID not found")
         command_queue_list = commands[id]
         for command_queue in command_queue_list:
-            command_queue.put(['start', timeout, uuid])
+            command_queue.put(['start', request.timeout, request.uuid])
         return {"status": "success", "message": "Face emotion detection started"}
     except HTTPException as e:
         return {"status": "error", "message": str(e)}
