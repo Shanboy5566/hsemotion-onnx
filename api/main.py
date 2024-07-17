@@ -3,6 +3,9 @@ from pydantic import BaseModel
 import cv2
 import multiprocessing
 import uuid
+import base64
+import os
+import json
 from typing import List
 from pymongo import MongoClient
 from hsemotion_onnx.facial_emotions_demo_multi import process_video
@@ -94,4 +97,32 @@ async def get_emotion_result(uuid_str: str):
             raise HTTPException(status_code=404, detail="No results found for given UUID")
         return {"status": "success", "results": results}
     except HTTPException as e:
+        return {"status": "error", "message": str(e), "results": []}
+
+@app.post("/backup_to_disk/{uuid_str}")
+async def backup_to_disk_api(uuid_str: str):
+    try:
+        # Create backup directory if it doesn't exist
+        backup_dir = f'backup/{uuid_str}'
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+
+        # Backup emotions
+        emotions = list(db.emotions.find({"uuid": uuid_str}, {"_id": 0}))  # Exclude _id field
+        with open(f'{backup_dir}/emotions.json', 'w') as f:
+            json.dump(emotions, f, ensure_ascii=False, indent=4)
+
+        # Backup pictures
+        pictures = list(db.pictures.find({"uuid": uuid_str}))
+        for i, picture in enumerate(pictures):
+            image_data = base64.b64decode(picture["image"])
+            with open(f'{backup_dir}/image_{i}.jpg', 'wb') as img_file:
+                img_file.write(image_data)
+
+        # Delete from DB
+        db.emotions.delete_many({"uuid": uuid_str})
+        db.pictures.delete_many({"uuid": uuid_str})
+
+        return {"status": "success", "message": "Backup completed and data removed from database"}
+    except Exception as e:
         return {"status": "error", "message": str(e)}

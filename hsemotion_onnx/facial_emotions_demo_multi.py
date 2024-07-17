@@ -4,6 +4,7 @@ import numpy as np
 import time
 import multiprocessing
 import uuid
+import base64
 from pymongo import MongoClient
 from collections import deque
 import datetime
@@ -45,6 +46,7 @@ def process_video(rtsp_url=None,
     start_detection = False
     emotion_queue = deque(maxlen=window_size)
     emotion_buffer = []
+    picture_buffer = []
 
     with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.25) as face_detection:
         start_time = time.time()
@@ -84,6 +86,9 @@ def process_video(rtsp_url=None,
 
                     image.flags.writeable = True
                     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                    _, buffer = cv2.imencode('.jpg', image)
+                    jpg_as_text = base64.b64encode(buffer).decode('utf-8')
+
                     if results.detections:
                         for detection in results.detections:
                             bboxC = detection.location_data.relative_bounding_box
@@ -123,9 +128,17 @@ def process_video(rtsp_url=None,
                             "scores": avg_scores.tolist()
                         })
 
+                        picture_buffer.append({
+                            "uuid": uuid_str,
+                            "timestamp": timestamp,
+                            "image": jpg_as_text
+                        })
+
                         if write_db and len(emotion_buffer) >= buffer_size:
                             # Save to MongoDB
                             db.emotions.insert_many(emotion_buffer)
+                            db.pictures.insert_many(picture_buffer)
+                            picture_buffer = []
                             emotion_buffer = []
 
                     if show:
@@ -140,3 +153,4 @@ def process_video(rtsp_url=None,
     if write_db and emotion_buffer:
         # Save remaining data to MongoDB
         db.emotions.insert_many(emotion_buffer)
+        db.pictures.insert_many(picture_buffer)
