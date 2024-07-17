@@ -17,11 +17,11 @@ id = str(uuid.uuid4())
 processes = {}
 commands = {}
 
-class EmotionRequest(BaseModel):
+class InitRequest(BaseModel):
     video_type: str = "webcam"
     video_url: List[str] = ["rtsp urls"]
     skip_frame: int = 1
-    window_size: int = 5
+    window_size: int = 1
     buffer_size: int = 10
     write_db: bool = False
     show: bool = False
@@ -64,7 +64,7 @@ def start_connection(video_type: str, video_urls: List[str], skip_frame: int, wi
         process.join()
 
 @app.post("/init_connection")
-async def init_connection_api(request: EmotionRequest, background_tasks: BackgroundTasks):
+async def init_connection_api(request: InitRequest, background_tasks: BackgroundTasks):
     try:
         video_urls = request.video_url if request.video_type != "webcam" else [0]
         
