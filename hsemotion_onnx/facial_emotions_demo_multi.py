@@ -5,6 +5,8 @@ import time
 import multiprocessing
 import uuid
 import base64
+import zlib
+
 from pymongo import MongoClient
 from collections import deque
 import datetime
@@ -27,6 +29,7 @@ def process_video(rtsp_url=None,
                   buffer_size=config.BUFFER_SIZE,
                   write_db=False, 
                   show=False,
+                  face_detection_confidence=0.25,
                   command_queue=None):
 
     cap = None
@@ -44,11 +47,10 @@ def process_video(rtsp_url=None,
 
     timeout = 999999
     start_detection = False
-    emotion_queue = deque(maxlen=window_size)
     emotion_buffer = []
     picture_buffer = []
 
-    with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.25) as face_detection:
+    with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=face_detection_confidence) as face_detection:
         start_time = time.time()
         frame_count = 0
         while cap.isOpened():
@@ -86,10 +88,9 @@ def process_video(rtsp_url=None,
 
                     image.flags.writeable = True
                     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                    _, buffer = cv2.imencode('.jpg', image)
-                    jpg_as_text = base64.b64encode(buffer).decode('utf-8')
 
                     if results.detections:
+                        emotions = []
                         for detection in results.detections:
                             bboxC = detection.location_data.relative_bounding_box
                             ih, iw, _ = image.shape
@@ -106,7 +107,7 @@ def process_video(rtsp_url=None,
                             emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
                             emotion = np.argmax(scores)
                             emotion = emotion_recognizer.idx_to_class[emotion]
-                            emotion_queue.append(scores)
+                            emotions.append(scores)
 
                             if show:
                                 cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
@@ -115,8 +116,9 @@ def process_video(rtsp_url=None,
                                 cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
                                             color=(0, 255, 0), thickness=3)
 
-                    if len(emotion_queue) == window_size:
-                        avg_scores = np.mean(emotion_queue, axis=0)
+                        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                        jpg_as_text = zlib.compress(buffer)
+                        avg_scores = np.mean(emotions, axis=0)
                         avg_emotion = np.argmax(avg_scores)
                         avg_emotion = emotion_recognizer.idx_to_class[avg_emotion]
                         timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
@@ -150,7 +152,9 @@ def process_video(rtsp_url=None,
     if show:
         cv2.destroyAllWindows()
 
-    if write_db and emotion_buffer:
+    if write_db:
         # Save remaining data to MongoDB
-        db.emotions.insert_many(emotion_buffer)
-        db.pictures.insert_many(picture_buffer)
+        if len(emotion_buffer) > 0:
+            db.emotions.insert_many(emotion_buffer)
+        if len(picture_buffer) > 0:
+            db.pictures.insert_many(picture_buffer)

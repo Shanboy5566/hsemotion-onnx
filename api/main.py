@@ -4,6 +4,7 @@ import cv2
 import multiprocessing
 import uuid
 import base64
+import zlib
 import os
 import json
 from typing import List
@@ -28,6 +29,7 @@ class InitRequest(BaseModel):
     buffer_size: int = 10
     write_db: bool = False
     show: bool = False
+    face_detection_confidence: float = 0.25
 
 class FaceRequest(BaseModel):
     uuid: str = "uuid"
@@ -50,14 +52,14 @@ def check_video_stream(video_type: str, video_urls: list):
 
         cap.release()
 
-def start_connection(video_type: str, video_urls: List[str], skip_frame: int, window_size: int, buffer_size: int, write_db: bool, show: bool, command_queue_list: list):
+def start_connection(video_type: str, video_urls: List[str], skip_frame: int, window_size: int, buffer_size: int, write_db: bool, show: bool, face_detection_confidence: float, command_queue_list: list):
     processes = []
     if video_type == 'webcam':
-        process = multiprocessing.Process(target=process_video, args=(None, 0, skip_frame, window_size, buffer_size, write_db, show, command_queue_list[0]))
+        process = multiprocessing.Process(target=process_video, args=(None, 0, skip_frame, window_size, buffer_size, write_db, show, face_detection_confidence, command_queue_list[0]))
         processes.append(process)
     else:
         for i, video_url in enumerate(video_urls):
-            process = multiprocessing.Process(target=process_video, args=(video_url, None, skip_frame, window_size, buffer_size, write_db, show, command_queue_list[i]))
+            process = multiprocessing.Process(target=process_video, args=(video_url, None, skip_frame, window_size, buffer_size, write_db, show, face_detection_confidence, command_queue_list[i]))
             processes.append(process)
     
     for process in processes:
@@ -73,7 +75,7 @@ async def init_connection_api(request: InitRequest, background_tasks: Background
         
         command_queue = [multiprocessing.Queue() for _ in range(len(video_urls))]
         commands[id] = command_queue
-        background_tasks.add_task(start_connection, request.video_type, video_urls, request.skip_frame, request.window_size, request.buffer_size, request.write_db, request.show, command_queue)
+        background_tasks.add_task(start_connection, request.video_type, video_urls, request.skip_frame, request.window_size, request.buffer_size, request.write_db, request.show, request.face_detection_confidence, command_queue)
         
         return {"status": "success", "message": "Face detection process started", "uuid": id}
     except HTTPException as e:
@@ -115,7 +117,7 @@ async def backup_to_disk_api(uuid_str: str):
         # Backup pictures
         pictures = list(db.pictures.find({"uuid": uuid_str}))
         for i, picture in enumerate(pictures):
-            image_data = base64.b64decode(picture["image"])
+            image_data = zlib.decompress(picture["image"])
             with open(f'{backup_dir}/image_{i}.jpg', 'wb') as img_file:
                 img_file.write(image_data)
 
