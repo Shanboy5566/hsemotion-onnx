@@ -15,7 +15,8 @@ from hsemotion_onnx.config import config
 app = FastAPI()
 
 client = MongoClient(config.MONGO_URL)
-db = client.emotion_db
+emotion_db = client.emotion_db
+picture_db = client.picture_db
 
 id = str(uuid.uuid4())
 processes = {}
@@ -26,8 +27,9 @@ class InitRequest(BaseModel):
     video_url: List[str] = ["rtsp urls"]
     skip_frame: int = 1
     window_size: int = 1
-    buffer_size: int = 10
+    buffer_size: int = 20
     write_db: bool = False
+    write_picture: bool = False
     show: bool = False
     face_detection_confidence: float = 0.25
 
@@ -52,14 +54,14 @@ def check_video_stream(video_type: str, video_urls: list):
 
         cap.release()
 
-def start_connection(video_type: str, video_urls: List[str], skip_frame: int, window_size: int, buffer_size: int, write_db: bool, show: bool, face_detection_confidence: float, command_queue_list: list):
+def start_connection(video_type: str, video_urls: List[str], skip_frame: int, window_size: int, buffer_size: int, write_db: bool, write_pictur: bool, show: bool, face_detection_confidence: float, command_queue_list: list):
     processes = []
     if video_type == 'webcam':
-        process = multiprocessing.Process(target=process_video, args=(None, 0, skip_frame, window_size, buffer_size, write_db, show, face_detection_confidence, command_queue_list[0]))
+        process = multiprocessing.Process(target=process_video, args=(None, 0, skip_frame, window_size, buffer_size, write_db, write_pictur, show, face_detection_confidence, command_queue_list[0]))
         processes.append(process)
     else:
         for i, video_url in enumerate(video_urls):
-            process = multiprocessing.Process(target=process_video, args=(video_url, None, skip_frame, window_size, buffer_size, write_db, show, face_detection_confidence, command_queue_list[i]))
+            process = multiprocessing.Process(target=process_video, args=(video_url, None, skip_frame, window_size, buffer_size, write_db, write_pictur, show, face_detection_confidence, command_queue_list[i]))
             processes.append(process)
     
     for process in processes:
@@ -75,7 +77,7 @@ async def init_connection_api(request: InitRequest, background_tasks: Background
         
         command_queue = [multiprocessing.Queue() for _ in range(len(video_urls))]
         commands[id] = command_queue
-        background_tasks.add_task(start_connection, request.video_type, video_urls, request.skip_frame, request.window_size, request.buffer_size, request.write_db, request.show, request.face_detection_confidence, command_queue)
+        background_tasks.add_task(start_connection, request.video_type, video_urls, request.skip_frame, request.window_size, request.buffer_size, request.write_db, request.write_picture, request.show, request.face_detection_confidence, command_queue)
         
         return {"status": "success", "message": "Face detection process started", "uuid": id}
     except HTTPException as e:
@@ -110,20 +112,20 @@ async def backup_to_disk_api(uuid_str: str):
             os.makedirs(backup_dir)
 
         # Backup emotions
-        emotions = list(db.emotions.find({"uuid": uuid_str}, {"_id": 0}))  # Exclude _id field
+        emotions = list(emotion_db.emotions.find({"uuid": uuid_str}, {"_id": 0}))  # Exclude _id field
         with open(f'{backup_dir}/emotions.json', 'w') as f:
             json.dump(emotions, f, ensure_ascii=False, indent=4)
 
         # Backup pictures
-        pictures = list(db.pictures.find({"uuid": uuid_str}))
+        pictures = list(picture_db.pictures.find({"uuid": uuid_str}))
         for i, picture in enumerate(pictures):
             image_data = zlib.decompress(picture["image"])
             with open(f'{backup_dir}/image_{i}.jpg', 'wb') as img_file:
                 img_file.write(image_data)
 
         # Delete from DB
-        db.emotions.delete_many({"uuid": uuid_str})
-        db.pictures.delete_many({"uuid": uuid_str})
+        emotion_db.emotions.delete_many({"uuid": uuid_str})
+        picture_db.pictures.delete_many({"uuid": uuid_str})
 
         return {"status": "success", "message": "Backup completed and data removed from database"}
     except Exception as e:

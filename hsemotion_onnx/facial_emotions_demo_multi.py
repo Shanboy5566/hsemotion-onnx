@@ -6,6 +6,7 @@ import multiprocessing
 import uuid
 import base64
 import zlib
+from typing import List
 
 from pymongo import MongoClient
 from collections import deque
@@ -20,14 +21,21 @@ emotion_recognizer = HSEmotionRecognizer(model_name=config.MODEL_NAME)
 
 # MongoDB client setup
 client = MongoClient(config.MONGO_URL)
-db = client.emotion_db
+emotion_db = client.emotion_db
+picture_db = client.picture_db
+
+def write_to_db(table, buffer: List):
+    if (len(buffer) == 0): return
+    table.insert_many(buffer)
+    buffer = []
 
 def process_video(rtsp_url=None, 
                   webcam=None, 
                   skip_frame=config.SKIP_FRAME, 
                   window_size=config.WINDOW_SIZE, 
                   buffer_size=config.BUFFER_SIZE,
-                  write_db=False, 
+                  write_db=False,
+                  write_picture=False,
                   show=False,
                   face_detection_confidence=0.25,
                   command_queue=None):
@@ -60,6 +68,12 @@ def process_video(rtsp_url=None,
                 timeout = 999999
                 if show:
                     cv2.destroyAllWindows()
+                if write_db:
+                    emotion_db.emotions.insert_many(emotion_buffer)
+                    emotion_buffer = []
+                if write_picture:
+                    picture_db.pictures.insert_many(picture_buffer)
+                    picture_buffer = []
 
             success, image = cap.read()
             if not success:
@@ -116,32 +130,39 @@ def process_video(rtsp_url=None,
                                 cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
                                             color=(0, 255, 0), thickness=3)
 
-                        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                        resized_image = cv2.resize(image, (400, 300))
+                        _, buffer = cv2.imencode('.jpg', resized_image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
                         jpg_as_text = zlib.compress(buffer)
-                        avg_scores = np.mean(emotions, axis=0)
-                        avg_emotion = np.argmax(avg_scores)
-                        avg_emotion = emotion_recognizer.idx_to_class[avg_emotion]
-                        timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
-                        emotion_buffer.append({
-                            "uuid": uuid_str,
-                            "timestamp": timestamp,
-                            "emotion": avg_emotion,
-                            "scores": avg_scores.tolist()
-                        })
+                        for face_id, emotion in enumerate(emotions):
+                            emotion_max_id = np.argmax(emotion)
+                            emotion_max_class = emotion_recognizer.idx_to_class[emotion_max_id]
+                            timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
-                        picture_buffer.append({
-                            "uuid": uuid_str,
-                            "timestamp": timestamp,
-                            "image": jpg_as_text
-                        })
+                            emotion_buffer.append({
+                                "uuid": uuid_str,
+                                "face_id": face_id,
+                                "timestamp": timestamp,
+                                "emotion": emotion_max_class,
+                                "scores": emotion.tolist()
+                            })
+
+                        if write_picture:
+                            picture_buffer.append({
+                                "uuid": uuid_str,
+                                "timestamp": timestamp,
+                                "image": jpg_as_text
+                            })
 
                         if write_db and len(emotion_buffer) >= buffer_size:
                             # Save to MongoDB
-                            db.emotions.insert_many(emotion_buffer)
-                            db.pictures.insert_many(picture_buffer)
-                            picture_buffer = []
+                            emotion_db.emotions.insert_many(emotion_buffer)
                             emotion_buffer = []
+
+                        if write_picture and len(picture_buffer) >= buffer_size:
+                            # Save to MongoDB
+                            picture_db.pictures.insert_many(picture_buffer)
+                            picture_buffer = []
 
                     if show:
                         cv2.imshow(f'Face Detection - {"webcam" if webcam else rtsp_url}', image)
@@ -155,6 +176,10 @@ def process_video(rtsp_url=None,
     if write_db:
         # Save remaining data to MongoDB
         if len(emotion_buffer) > 0:
-            db.emotions.insert_many(emotion_buffer)
-        if len(picture_buffer) > 0:
-            db.pictures.insert_many(picture_buffer)
+            emotion_db.emotions.insert_many(emotion_buffer)
+
+    if write_picture:
+        if len(picture_buffer) >= buffer_size:
+            # Save to MongoDB
+            picture_db.pictures.insert_many(picture_buffer)
+            picture_buffer = []
