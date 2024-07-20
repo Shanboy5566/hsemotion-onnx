@@ -6,6 +6,7 @@ import multiprocessing
 import uuid
 import base64
 import zlib
+import os
 from typing import List
 
 from pymongo import MongoClient
@@ -22,12 +23,21 @@ emotion_recognizer = HSEmotionRecognizer(model_name=config.MODEL_NAME)
 # MongoDB client setup
 client = MongoClient(config.MONGO_URL)
 emotion_db = client.emotion_db
-picture_db = client.picture_db
 
-def write_to_db(table, buffer: List):
-    if (len(buffer) == 0): return
-    table.insert_many(buffer)
-    buffer = []
+def write_picture_to_disk(picture_buffer):
+    if (len(picture_buffer) == 0):
+        return
+    uuid_str = picture_buffer[0]["uuid"]
+    device = picture_buffer[0]["device"]
+    backup_dir = f'backup/{uuid_str}/{device}/images'
+
+    if not os.path.exists(backup_dir):
+        os.makedirs(backup_dir)
+
+    for picture_id, picture in enumerate(picture_buffer):
+        image = zlib.decompress(picture["image"])
+        with open(f"./{backup_dir}/{uuid_str}-{picture_id}.jpg", 'wb') as img_file:
+            img_file.write(image)
 
 def process_video(rtsp_url=None, 
                   webcam=None, 
@@ -68,11 +78,11 @@ def process_video(rtsp_url=None,
                 timeout = 999999
                 if show:
                     cv2.destroyAllWindows()
-                if write_db:
+                if write_db and len(emotion_buffer) > 0:
                     emotion_db.emotions.insert_many(emotion_buffer)
                     emotion_buffer = []
                 if write_picture:
-                    picture_db.pictures.insert_many(picture_buffer)
+                    write_picture_to_disk(picture_buffer)
                     picture_buffer = []
 
             success, image = cap.read()
@@ -130,7 +140,7 @@ def process_video(rtsp_url=None,
                                 cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
                                             color=(0, 255, 0), thickness=3)
 
-                        resized_image = cv2.resize(image, (400, 300))
+                        resized_image = cv2.resize(image, (800, 600))
                         _, buffer = cv2.imencode('.jpg', resized_image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
                         jpg_as_text = zlib.compress(buffer)
 
@@ -141,6 +151,7 @@ def process_video(rtsp_url=None,
 
                             emotion_buffer.append({
                                 "uuid": uuid_str,
+                                "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
                                 "face_id": face_id,
                                 "timestamp": timestamp,
                                 "emotion": emotion_max_class,
@@ -150,6 +161,7 @@ def process_video(rtsp_url=None,
                         if write_picture:
                             picture_buffer.append({
                                 "uuid": uuid_str,
+                                "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
                                 "timestamp": timestamp,
                                 "image": jpg_as_text
                             })
@@ -158,11 +170,6 @@ def process_video(rtsp_url=None,
                             # Save to MongoDB
                             emotion_db.emotions.insert_many(emotion_buffer)
                             emotion_buffer = []
-
-                        if write_picture and len(picture_buffer) >= buffer_size:
-                            # Save to MongoDB
-                            picture_db.pictures.insert_many(picture_buffer)
-                            picture_buffer = []
 
                     if show:
                         cv2.imshow(f'Face Detection - {"webcam" if webcam else rtsp_url}', image)
@@ -177,9 +184,3 @@ def process_video(rtsp_url=None,
         # Save remaining data to MongoDB
         if len(emotion_buffer) > 0:
             emotion_db.emotions.insert_many(emotion_buffer)
-
-    if write_picture:
-        if len(picture_buffer) >= buffer_size:
-            # Save to MongoDB
-            picture_db.pictures.insert_many(picture_buffer)
-            picture_buffer = []

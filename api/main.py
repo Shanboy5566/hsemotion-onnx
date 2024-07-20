@@ -16,7 +16,6 @@ app = FastAPI()
 
 client = MongoClient(config.MONGO_URL)
 emotion_db = client.emotion_db
-picture_db = client.picture_db
 
 id = str(uuid.uuid4())
 processes = {}
@@ -96,7 +95,7 @@ async def face_detection_api(request: FaceRequest):
 @app.get("/get_emotion_result/{uuid_str}")
 async def get_emotion_result(uuid_str: str):
     try:
-        results = list(db.emotions.find({"uuid": uuid_str}, {"_id": 0}))
+        results = list(emotion_db.emotions.find({"uuid": uuid_str}, {"_id": 0}))
         if not results:
             raise HTTPException(status_code=404, detail="No results found for given UUID")
         return {"status": "success", "results": results}
@@ -116,16 +115,8 @@ async def backup_to_disk_api(uuid_str: str):
         with open(f'{backup_dir}/emotions.json', 'w') as f:
             json.dump(emotions, f, ensure_ascii=False, indent=4)
 
-        # Backup pictures
-        pictures = list(picture_db.pictures.find({"uuid": uuid_str}))
-        for i, picture in enumerate(pictures):
-            image_data = zlib.decompress(picture["image"])
-            with open(f'{backup_dir}/image_{i}.jpg', 'wb') as img_file:
-                img_file.write(image_data)
-
         # Delete from DB
         emotion_db.emotions.delete_many({"uuid": uuid_str})
-        picture_db.pictures.delete_many({"uuid": uuid_str})
 
         return {"status": "success", "message": "Backup completed and data removed from database"}
     except Exception as e:
