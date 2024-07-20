@@ -21,6 +21,9 @@ id = str(uuid.uuid4())
 processes = {}
 commands = {}
 
+# @app.on_event("startup")
+# def create_indexes():
+#     emotion_db.emotions.create_index([("uuid", ASCENDING)])
 class InitRequest(BaseModel):
     video_type: str = "webcam"
     video_url: List[str] = ["rtsp urls"]

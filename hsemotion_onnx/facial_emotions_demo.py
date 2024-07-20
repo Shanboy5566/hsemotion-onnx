@@ -38,7 +38,7 @@ def process_video(video_source, parameter, skip_frame=1, timeout=None):
 
     start = time.time()
     with mp_face_detection.FaceDetection(
-        model_selection=1, min_detection_confidence=0.25) as face_detection:
+        model_selection=1, min_detection_confidence=0.01) as face_detection:
         frame_count = 0
         while cap.isOpened():
             success, image = cap.read()

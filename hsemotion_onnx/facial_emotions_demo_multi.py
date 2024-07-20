@@ -133,12 +133,11 @@ def process_video(rtsp_url=None,
                             emotion = emotion_recognizer.idx_to_class[emotion]
                             emotions.append(scores)
 
-                            if show:
-                                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                                fontScale = 2
-                                min_y = y if y >= 0 else 10
-                                cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
-                                            color=(0, 255, 0), thickness=3)
+                            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                            fontScale = 2
+                            min_y = y if y >= 0 else 10
+                            cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
+                                        color=(0, 255, 0), thickness=3)
 
                         resized_image = cv2.resize(image, (800, 600))
                         _, buffer = cv2.imencode('.jpg', resized_image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
