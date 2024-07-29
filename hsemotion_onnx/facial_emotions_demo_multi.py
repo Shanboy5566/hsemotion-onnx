@@ -39,16 +39,21 @@ def write_picture_to_disk(picture_buffer):
         with open(f"./{backup_dir}/{uuid_str}-{picture_id}.jpg", 'wb') as img_file:
             img_file.write(image)
 
-def process_video(rtsp_url=None, 
-                  webcam=None, 
-                  skip_frame=config.SKIP_FRAME, 
-                  window_size=config.WINDOW_SIZE, 
-                  buffer_size=config.BUFFER_SIZE,
-                  write_db=False,
-                  write_picture=False,
-                  show=False,
-                  face_detection_confidence=0.25,
-                  command_queue=None):
+def process_video(
+                rtsp_url=None, 
+                webcam=None, 
+                skip_frame=config.SKIP_FRAME, 
+                window_size=config.WINDOW_SIZE, 
+                buffer_size=config.BUFFER_SIZE,
+                write_db=False,
+                write_picture=False,
+                show=False,
+                face_detection_confidence=0.25,
+                image_zoom_factor=1.0,
+                horizontal_splits=False,
+                vertical_splits=False,
+                command_queue=None
+                ):
 
     cap = None
     if webcam is not None:
@@ -108,72 +113,99 @@ def process_video(rtsp_url=None,
                 if frame_count % skip_frame == 0:
                     image.flags.writeable = False
                     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                    results = face_detection.process(image)
 
-                    image.flags.writeable = True
-                    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-                    if results.detections:
-                        emotions = []
-                        for detection in results.detections:
-                            bboxC = detection.location_data.relative_bounding_box
-                            ih, iw, _ = image.shape
-                            x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
-                                         int(bboxC.width * iw), int(bboxC.height * ih)
+                    image = cv2.resize(image, (0, 0), fx=image_zoom_factor, fy=image_zoom_factor)
+                    height, width, _ = image.shape
 
-                            x = max(0, x)
-                            y = max(0, y)
-                            w = min(iw - x, w)
-                            h = min(ih - y, h)
+                    images = []
 
-                            face_img = image[y:y + h, x:x + w]
+                    if not horizontal_splits and not vertical_splits:
+                        images.append(image)
 
-                            emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
-                            emotion = np.argmax(scores)
-                            emotion = emotion_recognizer.idx_to_class[emotion]
-                            emotions.append(scores)
+                    if horizontal_splits:
+                        midpoint = height // 2
+                        top_image = image[:midpoint, :]
+                        bottom_image = image[midpoint:, :]
+                        images.append(top_image)
+                        images.append(bottom_image)
+                    
+                    if vertical_splits:
+                        midpoint = width // 2
+                        left_image = image[:, :midpoint]
+                        right_image = image[:, midpoint:]
+                        images.append(left_image)
+                        images.append(right_image)
 
-                            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                            fontScale = 2
-                            min_y = y if y >= 0 else 10
-                            cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
-                                        color=(0, 255, 0), thickness=3)
+                    for split_id, image in enumerate(images):
+                        results = face_detection.process(image)
 
-                        resized_image = cv2.resize(image, (800, 600))
-                        _, buffer = cv2.imencode('.jpg', resized_image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-                        jpg_as_text = zlib.compress(buffer)
+                        image.flags.writeable = True
+                        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-                        for face_id, emotion in enumerate(emotions):
-                            emotion_max_id = np.argmax(emotion)
-                            emotion_max_class = emotion_recognizer.idx_to_class[emotion_max_id]
-                            timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+                        if results.detections:
+                            emotions = []
+                            for detection in results.detections:
+                                bboxC = detection.location_data.relative_bounding_box
+                                ih, iw, _ = image.shape
+                                x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
+                                            int(bboxC.width * iw), int(bboxC.height * ih)
 
-                            emotion_buffer.append({
-                                "uuid": uuid_str,
-                                "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
-                                "face_id": face_id,
-                                "timestamp": timestamp,
-                                "emotion": emotion_max_class,
-                                "scores": emotion.tolist()
-                            })
+                                x = max(0, x)
+                                y = max(0, y)
+                                w = min(iw - x, w)
+                                h = min(ih - y, h)
 
-                        if write_picture:
-                            picture_buffer.append({
-                                "uuid": uuid_str,
-                                "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
-                                "timestamp": timestamp,
-                                "image": jpg_as_text
-                            })
+                                face_img = image[y:y + h, x:x + w]
 
-                        if write_db and len(emotion_buffer) >= buffer_size:
-                            # Save to MongoDB
-                            emotion_db.emotions.insert_many(emotion_buffer)
-                            emotion_buffer = []
+                                emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
+                                emotion = np.argmax(scores)
+                                emotion = emotion_recognizer.idx_to_class[emotion]
+                                emotions.append(scores)
 
-                    if show:
-                        cv2.imshow(f'Face Detection - {"webcam" if webcam else rtsp_url}', image)
-                        if cv2.waitKey(5) & 0xFF == ord("q"):
-                            break
+                                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                                fontScale = 2
+                                min_y = y if y >= 0 else 10
+                                cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
+                                            color=(0, 255, 0), thickness=3)
+
+                            resized_image = cv2.resize(image, (800, 600))
+                            _, buffer = cv2.imencode('.jpg', resized_image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                            jpg_as_text = zlib.compress(buffer)
+
+                            for face_id, emotion in enumerate(emotions):
+                                emotion_max_id = np.argmax(emotion)
+                                emotion_max_class = emotion_recognizer.idx_to_class[emotion_max_id]
+                                timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+                                emotion_buffer.append({
+                                    "uuid": uuid_str,
+                                    "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
+                                    "face_id": face_id,
+                                    "split_id": split_id,
+                                    "timestamp": timestamp,
+                                    "emotion": emotion_max_class,
+                                    "scores": emotion.tolist()
+                                })
+
+                            if write_picture:
+                                picture_buffer.append({
+                                    "uuid": uuid_str,
+                                    "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
+                                    "split_id": split_id,
+                                    "timestamp": timestamp,
+                                    "image": jpg_as_text
+                                })
+
+                            if write_db and len(emotion_buffer) >= buffer_size:
+                                # Save to MongoDB
+                                emotion_db.emotions.insert_many(emotion_buffer)
+                                emotion_buffer = []
+
+                        if show:
+                            cv2.imshow(f'Face Detection - {"webcam" if webcam else rtsp_url} - {split_id}', image)
+                            if cv2.waitKey(5) & 0xFF == ord("q"):
+                                break
 
     cap.release()
     if show:

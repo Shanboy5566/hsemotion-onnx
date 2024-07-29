@@ -21,9 +21,6 @@ id = str(uuid.uuid4())
 processes = {}
 commands = {}
 
-# @app.on_event("startup")
-# def create_indexes():
-#     emotion_db.emotions.create_index([("uuid", ASCENDING)])
 class InitRequest(BaseModel):
     video_type: str = "webcam"
     video_url: List[str] = ["rtsp urls"]
@@ -34,6 +31,9 @@ class InitRequest(BaseModel):
     write_picture: bool = False
     show: bool = False
     face_detection_confidence: float = 0.25
+    image_zoom_factor: float = 0.5
+    horizontal_splits: bool = False
+    vertical_splits: bool = False
 
 class FaceRequest(BaseModel):
     uuid: str = "uuid"
@@ -56,14 +56,61 @@ def check_video_stream(video_type: str, video_urls: list):
 
         cap.release()
 
-def start_connection(video_type: str, video_urls: List[str], skip_frame: int, window_size: int, buffer_size: int, write_db: bool, write_pictur: bool, show: bool, face_detection_confidence: float, command_queue_list: list):
+def start_connection(video_type: str, 
+                    video_urls: List[str], 
+                    skip_frame: int, 
+                    window_size: int, 
+                    buffer_size: int, 
+                    write_db: bool, 
+                    write_pictur: bool, 
+                    show: bool, 
+                    face_detection_confidence: float, 
+                    image_zoom_factor: float,
+                    horizontal_splits: bool,
+                    vertical_splits: bool,
+                    command_queue_list: list,
+                    ):
     processes = []
     if video_type == 'webcam':
-        process = multiprocessing.Process(target=process_video, args=(None, 0, skip_frame, window_size, buffer_size, write_db, write_pictur, show, face_detection_confidence, command_queue_list[0]))
+        process = multiprocessing.Process(
+            target=process_video, 
+            args=(
+                None, 
+                0, 
+                skip_frame, 
+                window_size, 
+                buffer_size, 
+                write_db, 
+                write_pictur, 
+                show, 
+                face_detection_confidence,
+                image_zoom_factor,
+                horizontal_splits,
+                vertical_splits,
+                command_queue_list[0],
+            )
+        )
         processes.append(process)
     else:
         for i, video_url in enumerate(video_urls):
-            process = multiprocessing.Process(target=process_video, args=(video_url, None, skip_frame, window_size, buffer_size, write_db, write_pictur, show, face_detection_confidence, command_queue_list[i]))
+            process = multiprocessing.Process(
+                target=process_video, 
+                args=(
+                    video_url, 
+                    None, 
+                    skip_frame, 
+                    window_size, 
+                    buffer_size, 
+                    write_db, 
+                    write_pictur, 
+                    show, 
+                    face_detection_confidence, 
+                    image_zoom_factor,
+                    horizontal_splits,
+                    vertical_splits,
+                    command_queue_list[i],
+                )
+            )
             processes.append(process)
     
     for process in processes:
@@ -79,7 +126,22 @@ async def init_connection_api(request: InitRequest, background_tasks: Background
         
         command_queue = [multiprocessing.Queue() for _ in range(len(video_urls))]
         commands[id] = command_queue
-        background_tasks.add_task(start_connection, request.video_type, video_urls, request.skip_frame, request.window_size, request.buffer_size, request.write_db, request.write_picture, request.show, request.face_detection_confidence, command_queue)
+        background_tasks.add_task(
+            start_connection, 
+            request.video_type, 
+            video_urls, 
+            request.skip_frame, 
+            request.window_size, 
+            request.buffer_size, 
+            request.write_db, 
+            request.write_picture, 
+            request.show, 
+            request.face_detection_confidence,
+            request.image_zoom_factor,
+            request.horizontal_splits,
+            request.vertical_splits,
+            command_queue
+        )
         
         return {"status": "success", "message": "Face detection process started", "uuid": id}
     except HTTPException as e:
