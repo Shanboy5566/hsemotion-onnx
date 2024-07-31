@@ -31,7 +31,7 @@ class InitRequest(BaseModel):
     write_picture: bool = False
     show: bool = False
     face_detection_confidence: float = 0.25
-    image_zoom_factor: float = 0.5
+    image_zoom_factor: float = 1.0
     horizontal_splits: bool = False
     vertical_splits: bool = False
 
