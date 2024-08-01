@@ -75,9 +75,9 @@ def process_video(
     picture_buffer = []
 
     # center face
+    print("Loading CenterFace model")
     centerface = CenterFace()
 
-    # with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=face_detection_confidence) as face_detection:
     start_time = time.time()
     frame_count = 0
     while cap.isOpened():
@@ -142,29 +142,13 @@ def process_video(
                     images.append(right_image)
 
                 for split_id, image in enumerate(images):
-                    # results = face_detection.process(image)
                     dets, lms = centerface(image, height, width, threshold=0.35)
 
                     image.flags.writeable = True
                     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-                    # if results.detections:
                     emotions = []
-                    # for detection in results.detections:
                     for detection in dets:
-                        # bboxC = detection.location_data.relative_bounding_box
-                        # ih, iw, _ = image.shape
-                        # x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
-                        #             int(bboxC.width * iw), int(bboxC.height * ih)
-
-                        # x = max(0, x)
-                        # y = max(0, y)
-                        # w = min(iw - x, w)
-                        # h = min(ih - y, h)
-
-                        # face_img = image[y:y + h, x:x + w]
-                        
-                        # cv2.rectangle(frame, (int(boxes[0]), int(boxes[1])), (int(boxes[2]), int(boxes[3])), (2, 255, 0), 1)
                         bboxC = detection[:4]
                         ih, iw, _ = image.shape
                         x, y, p, q = int(bboxC[0]), int(bboxC[1]), \
