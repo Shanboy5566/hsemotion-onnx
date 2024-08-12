@@ -5,15 +5,15 @@ import time
 import zlib
 import os
 from typing import List
-from .centerface import CenterFace
-
 from pymongo import MongoClient
 import datetime
-from .config import config
+
+from hsemotion_onnx.centerface import CenterFace
+from hsemotion_onnx.config import config
+from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
 
 mp_face_detection = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
-from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
 
 emotion_recognizer = HSEmotionRecognizer(model_name=config.MODEL_NAME)
 
