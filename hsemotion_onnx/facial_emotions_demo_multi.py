@@ -226,21 +226,21 @@ def process_video(
                         "scores": emotion.tolist()
                     })
 
-                # Save the face image
-                if write_picture:
-                    picture_buffer.append({
-                        "uuid": uuid_str,
-                        "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
-                        "split_id": split_id,
-                        "timestamp": timestamp,
-                        "image": jpg_as_text
-                    })
+                    # Save the face image
+                    if write_picture:
+                        picture_buffer.append({
+                            "uuid": uuid_str,
+                            "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
+                            "split_id": split_id,
+                            "timestamp": timestamp,
+                            "image": jpg_as_text
+                        })
 
-                # Write to MongoDB if buffer is full
-                if write_db and len(emotion_buffer) >= buffer_size:
-                    # Save to MongoDB
-                    emotion_db.emotions.insert_many(emotion_buffer)
-                    emotion_buffer = []
+                    # Write to MongoDB if buffer is full
+                    if write_db and len(emotion_buffer) >= buffer_size:
+                        # Save to MongoDB
+                        emotion_db.emotions.insert_many(emotion_buffer)
+                        emotion_buffer = []
 
                 if show:
                     cv2.imshow(f'Face Detection - {"webcam" if webcam else rtsp_url} - {split_id}', image)
