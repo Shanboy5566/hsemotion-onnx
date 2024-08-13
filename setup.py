@@ -8,7 +8,8 @@ requirements = [
     'fastapi',
     'uvicorn',
     'mediapipe',
-    'pymongo'
+    'pymongo',
+    'screeninfo'
 ]
 setup(
     name='hsemotion-onnx',
