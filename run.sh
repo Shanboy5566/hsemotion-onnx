@@ -10,11 +10,14 @@ VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
 cleanup() {
     echo "Cleaning up..."
     pkill -f "uvicorn"  # Kills the FastAPI process
-    # pkill -f "mpv"      # Kills the MPV process
+    pkill -f "mpv"      # Kills the MPV process
     pkill -f "sleep"    # Kills the sleep process
+    pkill -f "python"      # Kills the Python process
     echo "Done."
-    exit 0
 }
+
+# Ensure cleanup is called in the beginning
+cleanup
 
 # Set trap to catch SIGINT (Ctrl + C) and run cleanup function
 trap cleanup SIGINT
@@ -44,5 +47,6 @@ source venv/bin/activate && \
 python3 mpv-controller.py
 
 # Wait for all processes to finish
-read -p "Press any key to continue..."
+# read -p "Press any key to continue..."
 cleanup  # Ensure cleanup is called even after the read command
+exit 0
