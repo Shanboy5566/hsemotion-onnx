@@ -6,6 +6,9 @@ VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
 # PROJECT="/Users/shanboy/Documents/project/hsemotion-onnx"
 # VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
 
+export SADNESS_OFFSET=0.0
+# export MODEL_NAME="enet_b2_8_best"
+
 # Function to clean up background processes
 cleanup() {
     echo "Cleaning up..."
