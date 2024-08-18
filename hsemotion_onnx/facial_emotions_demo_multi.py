@@ -11,6 +11,7 @@ import datetime
 from hsemotion_onnx.centerface import CenterFace
 from hsemotion_onnx.config import config
 from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
+from hsemotion_onnx.utils import sadness_normalization
 
 mp_face_detection = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
@@ -195,6 +196,7 @@ def process_video(
 
                     # Emotion recognition
                     emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
+                    scores = sadness_normalization(scores, sadness_id=6, offset=config.SADNESS_OFFSET)
                     emotion = np.argmax(scores)
                     emotion = emotion_recognizer.idx_to_class[emotion]
                     emotions.append(scores)
@@ -206,6 +208,7 @@ def process_video(
                                 color=(0, 255, 0), thickness=3)
 
                 # Resize the image for saving
+                timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
                 resized_image = cv2.resize(image, (800, 600))
                 _, buffer = cv2.imencode('.jpg', resized_image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
                 jpg_as_text = zlib.compress(buffer)
@@ -214,7 +217,6 @@ def process_video(
                 for face_id, emotion in enumerate(emotions):
                     emotion_max_id = np.argmax(emotion)
                     emotion_max_class = emotion_recognizer.idx_to_class[emotion_max_id]
-                    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
                     emotion_buffer.append({
                         "uuid": uuid_str,
@@ -226,21 +228,21 @@ def process_video(
                         "scores": emotion.tolist()
                     })
 
-                    # Save the face image
-                    if write_picture:
-                        picture_buffer.append({
-                            "uuid": uuid_str,
-                            "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
-                            "split_id": split_id,
-                            "timestamp": timestamp,
-                            "image": jpg_as_text
-                        })
-
                     # Write to MongoDB if buffer is full
                     if write_db and len(emotion_buffer) >= buffer_size:
                         # Save to MongoDB
                         emotion_db.emotions.insert_many(emotion_buffer)
                         emotion_buffer = []
+
+                # Save the face image
+                if write_picture:
+                    picture_buffer.append({
+                        "uuid": uuid_str,
+                        "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
+                        "split_id": split_id,
+                        "timestamp": timestamp,
+                        "image": jpg_as_text
+                    })
 
                 if show:
                     cv2.imshow(f'Face Detection - {"webcam" if webcam else rtsp_url} - {split_id}', image)

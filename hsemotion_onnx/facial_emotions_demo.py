@@ -8,7 +8,9 @@ import logging
 from screeninfo import get_monitors
 
 from hsemotion_onnx.centerface import CenterFace
+from hsemotion_onnx.config import config
 from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
+from hsemotion_onnx.utils import sadness_normalization, emotion_to_branch
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -82,15 +84,17 @@ def process_video(video_source, parameter, skip_frame=1, timeout=None):
 
             # Emotion recognition
             emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
+            scores = sadness_normalization(scores, sadness_id=6, offset=config.SADNESS_OFFSET)
             emotion = np.argmax(scores)
             emotion = emotion_recognizer.idx_to_class[emotion]
+            if config.EMOTION_TO_BRANCH:
+                emotion = emotion_to_branch(emotion)
 
             cv2.rectangle(image, (x, y), (p, q), (0, 255, 0), 2)
             fontScale = 2
             min_y = y if y >= 0 else 10
             cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
                         color=(0, 255, 0), thickness=3)
-        cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale, color=(0, 255, 0), thickness=3)
         
         if cv2.waitKey(5) & 0xFF == ord("q"):
             break

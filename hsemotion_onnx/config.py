@@ -7,6 +7,8 @@ class Config:
     TIMEOUT = int(os.getenv("TIMEOUT", 999999))
     WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", 5))
     BUFFER_SIZE = int(os.getenv("BUFFER_SIZE", 10))
+    SADNESS_OFFSET = float(os.getenv("SADNESS_OFFSET", 0.0))
+    EMOTION_TO_BRANCH = int(os.getenv("EMOTION_TO_BRANCH", 0))
 
 config = Config()
 

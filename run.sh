@@ -3,6 +3,22 @@
 PROJECT="/Users/mac/Documents/hsemotion-onnx"
 VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
 
+# PROJECT="/Users/shanboy/Documents/project/hsemotion-onnx"
+# VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
+
+# Function to clean up background processes
+cleanup() {
+    echo "Cleaning up..."
+    pkill -f "uvicorn"  # Kills the FastAPI process
+    # pkill -f "mpv"      # Kills the MPV process
+    pkill -f "sleep"    # Kills the sleep process
+    echo "Done."
+    exit 0
+}
+
+# Set trap to catch SIGINT (Ctrl + C) and run cleanup function
+trap cleanup SIGINT
+
 # Orbstack
 echo "Starting Orbstack server..."
 orb start
@@ -29,5 +45,4 @@ python3 mpv-controller.py
 
 # Wait for all processes to finish
 read -p "Press any key to continue..."
-
-# A & B & C
+cleanup  # Ensure cleanup is called even after the read command
