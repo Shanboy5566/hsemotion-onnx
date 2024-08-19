@@ -7,7 +7,6 @@ requirements = [
     'onnxruntime',
     'fastapi',
     'uvicorn',
-    'mediapipe',
     'pymongo',
     'screeninfo'
 ]

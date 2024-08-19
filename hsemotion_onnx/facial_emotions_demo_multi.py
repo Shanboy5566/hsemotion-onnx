@@ -1,10 +1,8 @@
 import cv2
-import mediapipe as mp
 import numpy as np
 import time
 import zlib
 import os
-from typing import List
 from pymongo import MongoClient
 import datetime
 
@@ -12,9 +10,6 @@ from hsemotion_onnx.centerface import CenterFace
 from hsemotion_onnx.config import config
 from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
 from hsemotion_onnx.utils import sadness_normalization
-
-mp_face_detection = mp.solutions.face_detection
-mp_drawing = mp.solutions.drawing_utils
 
 emotion_recognizer = HSEmotionRecognizer(model_name=config.MODEL_NAME)
 

@@ -1,5 +1,4 @@
 import cv2
-import mediapipe as mp
 import numpy as np
 import argparse
 import time
@@ -14,9 +13,6 @@ from hsemotion_onnx.utils import sadness_normalization, emotion_to_branch
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-
-mp_face_detection = mp.solutions.face_detection
-mp_drawing = mp.solutions.drawing_utils
 
 model_name='enet_b0_8_best_vgaf'
 #model_name='enet_b0_8_va_mtl'
@@ -50,8 +46,6 @@ def process_video(video_source, parameter, skip_frame=1, timeout=None):
     centerface = CenterFace()
 
     start = time.time()
-    # with mp_face_detection.FaceDetection(
-    #     model_selection=1, min_detection_confidence=0.25) as face_detection:
     frame_count = 0
     while cap.isOpened():
         success, image = cap.read()
