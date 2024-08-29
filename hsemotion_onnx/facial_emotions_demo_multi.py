@@ -5,11 +5,16 @@ import zlib
 import os
 from pymongo import MongoClient
 import datetime
+import logging
 
 from hsemotion_onnx.centerface import CenterFace
 from hsemotion_onnx.config import config
 from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
 from hsemotion_onnx.utils import sadness_normalization
+
+# logger setup - write logs to file backend.log
+logging.basicConfig(filename='backend.log', level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 emotion_recognizer = HSEmotionRecognizer(model_name=config.MODEL_NAME)
 
@@ -33,13 +38,13 @@ def write_picture_to_disk(picture_buffer):
             img_file.write(image)
 
 def check_connection(cap, video_source, max_retries=5, delay=5):
-    print(f"Checking connection: {video_source}")
+    logger.info(f"{video_source} | Checking connection")
     retry = 0
     while retry < max_retries:
         if cap.read()[0] == True:
             return cap
         cap.release()
-        print(f"Connection lost for {video_source}. Retrying in {delay} seconds")
+        logger.info(f"{video_source} | Connection lost. Retrying in {delay} seconds")
         time.sleep(delay)
         cap = cv2.VideoCapture(video_source)
         retry += 1
@@ -92,11 +97,13 @@ def process_video(
     else:
         cap = cv2.VideoCapture(rtsp_url)
 
+    video_source = "webcam" if is_webcam else rtsp_url
+
     if not cap.isOpened():
-        print(f"Error: Couldn't open {'webcam' if is_webcam else rtsp_url}")
+        logger.info(f"Error: Couldn't open {video_source}")
         return
 
-    print(f"Connection established for {'webcam' if is_webcam else rtsp_url}")
+    logger.info(f"{video_source} | Connection established")
 
     timeout = 999999
     start_detection = False
@@ -104,7 +111,7 @@ def process_video(
     picture_buffer = []
 
     # center face
-    print("Loading CenterFace model")
+    logger.info("Loading CenterFace model")
     centerface = CenterFace()
 
     start_time = time.time()
@@ -115,7 +122,7 @@ def process_video(
         # Check if we need to stop the detection
         # When timeout is reached, we will stop the detection and write the remaining data to the database
         if time.time() - start_time > timeout:
-            print(f"Timeout reached for {'webcam' if is_webcam else rtsp_url}")
+            logger.info(f"{video_source} | Timeout reached")
             start_detection = False
             timeout = 999999
             if show:
@@ -141,23 +148,23 @@ def process_video(
             # 3. uuid is the unique identifier for the detection session
             if command_queue and not command_queue.empty():
                 command, timeout, uuid_str = command_queue.get()
-                print(f"Received command: {command}, timeout: {timeout}, uuid: {uuid_str}")
-                cap = check_connection(cap, webcam if is_webcam else rtsp_url)
+                logger.info(f"{video_source} | Received command: {command}, timeout: {timeout}, uuid: {uuid_str}")
+                cap = check_connection(cap, video_source)
                 if cap is None:
-                    print(f"Error: Couldn't open {'webcam' if is_webcam else rtsp_url}")
+                    logger.info(f"Error: Couldn't open {video_source}")
                     return
                 if command == 'start':
                     start_detection = True
                     start_time = time.time()
-                    print(f"start: {start_time}, timeout: {timeout}")
+                    logger.info(f"{video_source} | start: {start_time}, timeout: {timeout}")
                 else:
-                    print(f"Invalid command received: {command}")
+                    logger.info(f"{video_source} | Invalid command received: {command}")
                     cap.release()
                     return
         else:
             success, image = cap.read()
             if not success:
-                print(f"Ignoring empty frame from {'webcam' if is_webcam else rtsp_url}")
+                logger.info(f"{video_source} | Ignoring empty frame from {video_source}")
                 continue
 
             frame_count += 1
@@ -234,7 +241,7 @@ def process_video(
 
                     emotion_buffer.append({
                         "uuid": uuid_str,
-                        "device": 'webcam' if is_webcam else rtsp_url.split('@')[-1].split(':')[0],
+                        "device": video_source.split('@')[-1].split(':')[0],
                         "face_id": face_id,
                         "split_id": split_id,
                         "timestamp": timestamp,
@@ -252,7 +259,7 @@ def process_video(
                 if write_picture:
                     picture_buffer.append({
                         "uuid": uuid_str,
-                        "device": 'webcam' if is_webcam else rtsp_url.split('@')[-1].split(':')[0],
+                        "device": video_source.split('@')[-1].split(':')[0],
                         "split_id": split_id,
                         "timestamp": timestamp,
                         "image": jpg_as_text
