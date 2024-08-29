@@ -32,6 +32,20 @@ def write_picture_to_disk(picture_buffer):
         with open(f"./{backup_dir}/{uuid_str}-{picture_id}.jpg", 'wb') as img_file:
             img_file.write(image)
 
+def check_connection(cap, video_source, max_retries=5, delay=5):
+    print(f"Checking connection: {video_source}")
+    retry = 0
+    while retry < max_retries:
+        if cap.read()[0] == True:
+            return cap
+        cap.release()
+        print(f"Connection lost for {video_source}. Retrying in {delay} seconds")
+        time.sleep(delay)
+        cap = cv2.VideoCapture(video_source)
+        retry += 1
+    return None
+
+
 def process_video(
                 rtsp_url=None, 
                 webcam=None, 
@@ -71,17 +85,18 @@ def process_video(
     """
 
     cap = None
+    is_webcam = False
     if webcam is not None:
         cap = cv2.VideoCapture(webcam)
-        webcam = "0"
+        is_webcam = True
     else:
         cap = cv2.VideoCapture(rtsp_url)
 
     if not cap.isOpened():
-        print(f"Error: Couldn't open {'webcam' if webcam else rtsp_url}")
+        print(f"Error: Couldn't open {'webcam' if is_webcam else rtsp_url}")
         return
 
-    print(f"Connection established for {'webcam' if webcam else rtsp_url}")
+    print(f"Connection established for {'webcam' if is_webcam else rtsp_url}")
 
     timeout = 999999
     start_detection = False
@@ -100,7 +115,7 @@ def process_video(
         # Check if we need to stop the detection
         # When timeout is reached, we will stop the detection and write the remaining data to the database
         if time.time() - start_time > timeout:
-            print(f"Timeout reached for {'webcam' if webcam else rtsp_url}")
+            print(f"Timeout reached for {'webcam' if is_webcam else rtsp_url}")
             start_detection = False
             timeout = 999999
             if show:
@@ -117,13 +132,6 @@ def process_video(
                 write_picture_to_disk(picture_buffer)
                 picture_buffer = []
 
-        success, image = cap.read()
-        if not success:
-            print(f"Ignoring empty frame from {'webcam' if webcam else rtsp_url}")
-            continue
-
-        frame_count += 1
-
         # Check if we need to start the detection        
         if not start_detection:
             # Only start the detection when the command_queue is not empty
@@ -134,6 +142,10 @@ def process_video(
             if command_queue and not command_queue.empty():
                 command, timeout, uuid_str = command_queue.get()
                 print(f"Received command: {command}, timeout: {timeout}, uuid: {uuid_str}")
+                cap = check_connection(cap, webcam if is_webcam else rtsp_url)
+                if cap is None:
+                    print(f"Error: Couldn't open {'webcam' if is_webcam else rtsp_url}")
+                    return
                 if command == 'start':
                     start_detection = True
                     start_time = time.time()
@@ -143,6 +155,13 @@ def process_video(
                     cap.release()
                     return
         else:
+            success, image = cap.read()
+            if not success:
+                print(f"Ignoring empty frame from {'webcam' if is_webcam else rtsp_url}")
+                continue
+
+            frame_count += 1
+
             # Skip frames 
             if frame_count % skip_frame != 0:
                 continue
@@ -215,7 +234,7 @@ def process_video(
 
                     emotion_buffer.append({
                         "uuid": uuid_str,
-                        "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
+                        "device": 'webcam' if is_webcam else rtsp_url.split('@')[-1].split(':')[0],
                         "face_id": face_id,
                         "split_id": split_id,
                         "timestamp": timestamp,
@@ -233,14 +252,14 @@ def process_video(
                 if write_picture:
                     picture_buffer.append({
                         "uuid": uuid_str,
-                        "device": 'webcam' if webcam else rtsp_url.split('@')[-1].split(':')[0],
+                        "device": 'webcam' if is_webcam else rtsp_url.split('@')[-1].split(':')[0],
                         "split_id": split_id,
                         "timestamp": timestamp,
                         "image": jpg_as_text
                     })
 
                 if show:
-                    cv2.imshow(f'Face Detection - {"webcam" if webcam else rtsp_url} - {split_id}', image)
+                    cv2.imshow(f'Face Detection - {"webcam" if is_webcam else rtsp_url} - {split_id}', image)
                     if cv2.waitKey(5) & 0xFF == ord("q"):
                         break
 
