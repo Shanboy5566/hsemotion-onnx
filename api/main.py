@@ -9,12 +9,15 @@ import os
 import json
 from typing import List
 from pymongo import MongoClient
+from pymongo.errors import ServerSelectionTimeoutError
 from hsemotion_onnx.facial_emotions_demo_multi import process_video
 from hsemotion_onnx.config import config
 
 app = FastAPI()
 
-client = MongoClient(config.MONGO_URL)
+client = MongoClient(config.MONGO_URL,
+                     serverSelectionTimeoutMS=1000,
+                     socketTimeoutMS=1000)
 emotion_db = client.emotion_db
 
 id = str(uuid.uuid4())
@@ -166,6 +169,8 @@ async def get_emotion_result(uuid_str: str):
         return {"status": "success", "results": results}
     except HTTPException as e:
         return {"status": "error", "message": str(e), "results": []}
+    except ServerSelectionTimeoutError as e:
+        return {"status": "error", "message": "Database connection failed", "results": []}
 
 @app.post("/backup_to_disk/{uuid_str}")
 async def backup_to_disk_api(uuid_str: str):
