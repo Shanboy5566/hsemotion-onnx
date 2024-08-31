@@ -4,6 +4,7 @@ import time
 import zlib
 import os
 from pymongo import MongoClient
+from pymongo.errors import AutoReconnect
 import datetime
 import logging
 
@@ -19,7 +20,9 @@ logger = logging.getLogger(__name__)
 emotion_recognizer = HSEmotionRecognizer(model_name=config.MODEL_NAME)
 
 # MongoDB client setup
-client = MongoClient(config.MONGO_URL)
+client = MongoClient(config.MONGO_URL,
+                     serverSelectionTimeoutMS=config.MONGODB_SERVER_SELECTION_TIMEOUT_MS,
+                     )
 emotion_db = client.emotion_db
 
 def write_picture_to_disk(picture_buffer):
@@ -49,6 +52,24 @@ def check_connection(cap, video_source, max_retries=5, delay=1):
         time.sleep(delay)
         cap = cv2.VideoCapture(video_source)
         retry += 1
+
+def connect_to_db():
+    client = MongoClient(config.MONGO_URL,
+                     serverSelectionTimeoutMS=config.MONGODB_SERVER_SELECTION_TIMEOUT_MS,
+                     )
+    return client.emotion_db
+
+def insert_emotions(emotion_buffer):
+    global emotion_db
+    retry = 0
+    while True:
+        try:
+            emotion_db.emotions.insert_many(emotion_buffer)
+            break
+        except AutoReconnect:
+            logging.info(f"Retry {retry} | Connection lost. Reconnecting to the database...")
+            emotion_db = connect_to_db()
+            retry += 1
 
 def process_video(
                 rtsp_url=None, 
@@ -129,7 +150,7 @@ def process_video(
 
             # Write the remaining data to the database
             if write_db and len(emotion_buffer) > 0:
-                emotion_db.emotions.insert_many(emotion_buffer)
+                insert_emotions(emotion_buffer)
                 emotion_buffer = []
 
             # Only write the face images to disk if timeout is reached
@@ -261,13 +282,13 @@ def process_video(
                     # Write to MongoDB if buffer is full
                     if write_db and len(emotion_buffer) >= buffer_size:
                         # Save to MongoDB
-                        emotion_db.emotions.insert_many(emotion_buffer)
+                        
                         emotion_buffer = []
                 
                 # Write the remaining data to the database
                 if write_db and len(emotion_buffer) > 0:
                     # Save to MongoDB
-                    emotion_db.emotions.insert_many(emotion_buffer)
+                    insert_emotions(emotion_buffer)
                     emotion_buffer = []
 
                 # Save the face image
@@ -292,4 +313,4 @@ def process_video(
     if write_db:
         # Save remaining data to MongoDB
         if len(emotion_buffer) > 0:
-            emotion_db.emotions.insert_many(emotion_buffer)
+            insert_emotions(emotion_buffer)
