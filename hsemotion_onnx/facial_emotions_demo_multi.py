@@ -37,19 +37,18 @@ def write_picture_to_disk(picture_buffer):
         with open(f"./{backup_dir}/{uuid_str}-{picture_id}.jpg", 'wb') as img_file:
             img_file.write(image)
 
-def check_connection(cap, video_source, max_retries=5, delay=5):
+def check_connection(cap, video_source, max_retries=5, delay=1):
     logger.info(f"{video_source} | Checking connection")
     retry = 0
-    while retry < max_retries:
+    while True:
         if cap.read()[0] == True:
+            logger.info(f"{video_source} | Re-connected")
             return cap
         cap.release()
-        logger.info(f"{video_source} | Connection lost. Retrying in {delay} seconds")
+        logger.info(f"{video_source} | Retry {retry} | Connection lost. Retrying in {delay} seconds")
         time.sleep(delay)
         cap = cv2.VideoCapture(video_source)
         retry += 1
-    return None
-
 
 def process_video(
                 rtsp_url=None, 
@@ -139,6 +138,16 @@ def process_video(
                 write_picture_to_disk(picture_buffer)
                 picture_buffer = []
 
+        success, image = cap.read()
+        if not success:
+            logger.info(f"{video_source} | Ignoring empty frame from {video_source}")
+            cap = check_connection(cap, video_source)
+            if cap is None:
+                logger.info(f"Error: Couldn't open {video_source}")
+            continue
+
+        frame_count += 1
+
         # Check if we need to start the detection        
         if not start_detection:
             # Only start the detection when the command_queue is not empty
@@ -149,10 +158,10 @@ def process_video(
             if command_queue and not command_queue.empty():
                 command, timeout, uuid_str = command_queue.get()
                 logger.info(f"{video_source} | Received command: {command}, timeout: {timeout}, uuid: {uuid_str}")
-                cap = check_connection(cap, video_source)
-                if cap is None:
-                    logger.info(f"Error: Couldn't open {video_source}")
-                    return
+                # cap = check_connection(cap, video_source)
+                # if cap is None:
+                #     logger.info(f"Error: Couldn't open {video_source}")
+                #     return
                 if command == 'start':
                     start_detection = True
                     start_time = time.time()
@@ -162,12 +171,12 @@ def process_video(
                     cap.release()
                     return
         else:
-            success, image = cap.read()
-            if not success:
-                logger.info(f"{video_source} | Ignoring empty frame from {video_source}")
-                continue
+            # success, image = cap.read()
+            # if not success:
+            #     logger.info(f"{video_source} | Ignoring empty frame from {video_source}")
+            #     continue
 
-            frame_count += 1
+            # frame_count += 1
 
             # Skip frames 
             if frame_count % skip_frame != 0:
@@ -254,6 +263,12 @@ def process_video(
                         # Save to MongoDB
                         emotion_db.emotions.insert_many(emotion_buffer)
                         emotion_buffer = []
+                
+                # Write the remaining data to the database
+                if write_db and len(emotion_buffer) > 0:
+                    # Save to MongoDB
+                    emotion_db.emotions.insert_many(emotion_buffer)
+                    emotion_buffer = []
 
                 # Save the face image
                 if write_picture:
