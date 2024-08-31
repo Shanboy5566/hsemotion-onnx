@@ -1,7 +1,7 @@
 #!/bin/bash
 
 PROJECT="/Users/mac/Documents/hsemotion-onnx"
-VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
+VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0822_調低聲音.mov"
 
 # PROJECT="/Users/shanboy/Documents/project/hsemotion-onnx"
 # VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
