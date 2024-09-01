@@ -26,6 +26,19 @@ monitor = get_monitors()[0]
 screen_width = monitor.width
 screen_height = monitor.height
 
+def check_connection(cap, video_source, max_retries=5, delay=1):
+    logger.info(f"{video_source} | Checking connection")
+    retry = 0
+    while True:
+        if cap.read()[0] == True:
+            logger.info(f"{video_source} | Re-connected")
+            return cap
+        cap.release()
+        logger.info(f"{video_source} | Retry {retry} | Connection lost. Retrying in {delay} seconds")
+        time.sleep(delay)
+        cap = cv2.VideoCapture(video_source)
+        retry += 1
+
 def process_video(video_source, parameter, skip_frame=1, timeout=None):
     if video_source == 'webcam':
         cap = cv2.VideoCapture(0)
@@ -50,7 +63,10 @@ def process_video(video_source, parameter, skip_frame=1, timeout=None):
     while cap.isOpened():
         success, image = cap.read()
         if not success:
-            logger.error("Ignoring empty camera frame.")
+            logger.info(f"{video_source} | Ignoring empty frame from {video_source}")
+            cap = check_connection(cap, video_source)
+            if cap is None:
+                logger.info(f"Error: Couldn't open {video_source}")
             continue
 
         if time.time() - start > timeout:
