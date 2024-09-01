@@ -10,6 +10,7 @@ class Config:
     BUFFER_SIZE = int(os.getenv("BUFFER_SIZE", 10))
     SADNESS_OFFSET = float(os.getenv("SADNESS_OFFSET", 0.0))
     EMOTION_TO_BRANCH = int(os.getenv("EMOTION_TO_BRANCH", 0))
+    SWITCH_VIDEO_SOURCE_INTERVAL = int(os.getenv("SWITCH_VIDEO_SOURCE_INTERVAL", 15))
 
 config = Config()
 

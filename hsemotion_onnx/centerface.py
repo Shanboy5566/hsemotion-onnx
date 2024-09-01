@@ -25,7 +25,7 @@ class CenterFace(object):
         else:
             heatmap, scale, offset = self.net.forward(["535", "536", "537"])
         end = datetime.datetime.now()
-        print("cpu times = ", end - begin)
+        # print("cpu times = ", end - begin)
         return self.postprocess(heatmap, lms, offset, scale, threshold)
 
     def transform(self, h, w):

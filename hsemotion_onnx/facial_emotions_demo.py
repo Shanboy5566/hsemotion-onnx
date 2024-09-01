@@ -39,94 +39,103 @@ def check_connection(cap, video_source, max_retries=5, delay=1):
         cap = cv2.VideoCapture(video_source)
         retry += 1
 
-def process_video(video_source, parameter, skip_frame=1, timeout=None):
-    if video_source == 'webcam':
-        cap = cv2.VideoCapture(0)
-    elif video_source == 'file':
-        cap = cv2.VideoCapture(parameter)
-    elif video_source == 'rtsp':
-        cap = cv2.VideoCapture(parameter)
-    else:
-        logger.error("Error: Invalid video source.")
-        return
-
-    if not cap.isOpened():
-        logger.error(f"Error: Could not open {video_source} stream.")
-        return
-
-    # center face
+def process_video(video_sources, skip_frame=1, timeout=None):
+    # Load CenterFace model
     print("Loading CenterFace model")
     centerface = CenterFace()
 
-    start = time.time()
-    frame_count = 0
-    while cap.isOpened():
-        success, image = cap.read()
-        if not success:
-            logger.info(f"{video_source} | Ignoring empty frame from {video_source}")
-            cap = check_connection(cap, video_source)
-            if cap is None:
-                logger.info(f"Error: Couldn't open {video_source}")
+    current_source_idx = 0
+    cap = None
+    start_time = time.time()
+
+    while True:
+        video_source = video_sources[current_source_idx]
+        logger.info(f"video_source: {video_source}")
+
+        # Open the video source
+        cap = cv2.VideoCapture(video_source)
+        if not cap.isOpened():
+            logger.error(f"Error: Could not open {video_source} stream.")
+            current_source_idx = (current_source_idx + 1) % len(video_sources)
             continue
 
-        if time.time() - start > timeout:
-            logger.info(f"Timeout reached. Stopping video processing.")
-            break
+        start = time.time()
+        frame_count = 0
+        while cap.isOpened():
+            success, image = cap.read()
+            if not success:
+                logger.info(f"{video_source} | Ignoring empty frame from {video_source}")
+                cap = check_connection(cap, video_source)
+                if cap is None:
+                    logger.info(f"Error: Couldn't open {video_source}")
+                continue
 
-        frame_count += 1
-        if frame_count % skip_frame != 0:
-            continue
+            # Switch video source every x seconds
+            if time.time() - start_time > config.SWITCH_VIDEO_SOURCE_INTERVAL:
+                start_time = time.time()
+                current_source_idx = (current_source_idx + 1) % len(video_sources)
+                cap.release()
+                logger.info(f"Switch")
+                break
 
-        image.flags.writeable = False
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        height, width, _ = image.shape
-        # Face detection
-        dets, lms = centerface(image, height, width, threshold=0.35)
+            # Check for timeout
+            if time.time() - start > timeout:
+                logger.info(f"Timeout reached. Stopping video processing.")
+                break
 
-        image.flags.writeable = True
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        for detection in dets:
-            # Get the bounding box coordinates of the face
-            bboxC = detection[:4]
-            x, y, p, q = int(bboxC[0]), int(bboxC[1]), \
-                        int(bboxC[2]), int(bboxC[3])
-            face_img = image[y:q, x:p]
+            frame_count += 1
+            if frame_count % skip_frame != 0:
+                continue
 
-            # Emotion recognition
-            emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
-            scores = sadness_normalization(scores, sadness_id=6, offset=config.SADNESS_OFFSET)
-            emotion = np.argmax(scores)
-            emotion = emotion_recognizer.idx_to_class[emotion]
-            if config.EMOTION_TO_BRANCH:
-                emotion = emotion_to_branch(emotion)
+            image.flags.writeable = False
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            height, width, _ = image.shape
 
-            cv2.rectangle(image, (x, y), (p, q), (0, 255, 0), 2)
-            fontScale = 2
-            min_y = y if y >= 0 else 10
-            cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
-                        color=(0, 255, 0), thickness=3)
-        
-        if cv2.waitKey(5) & 0xFF == ord("q"):
-            break
-            
-        cv2.namedWindow('MediaPipe Face Detection', cv2.WINDOW_NORMAL)
-        cv2.setWindowProperty('MediaPipe Face Detection', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        resized_image = cv2.resize(image, (screen_width, screen_height))
-        cv2.imshow('MediaPipe Face Detection', resized_image)
+            # Face detection
+            dets, lms = centerface(image, height, width, threshold=0.35)
 
-    cap.release()
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            for detection in dets:
+                bboxC = detection[:4]
+                x, y, p, q = int(bboxC[0]), int(bboxC[1]), int(bboxC[2]), int(bboxC[3])
+                face_img = image[y:q, x:p]
+
+                # Emotion recognition
+                emotion, scores = emotion_recognizer.predict_emotions(face_img, logits=True)
+                scores = sadness_normalization(scores, sadness_id=6, offset=config.SADNESS_OFFSET)
+                emotion = np.argmax(scores)
+                emotion = emotion_recognizer.idx_to_class[emotion]
+                if config.EMOTION_TO_BRANCH:
+                    emotion = emotion_to_branch(emotion)
+
+                cv2.rectangle(image, (x, y), (p, q), (0, 255, 0), 2)
+                fontScale = 2
+                min_y = y if y >= 0 else 10
+                cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
+                            color=(0, 255, 0), thickness=3)
+
+            if cv2.waitKey(5) & 0xFF == ord("q"):
+                break
+
+            cv2.namedWindow('MediaPipe Face Detection', cv2.WINDOW_NORMAL)
+            cv2.setWindowProperty('MediaPipe Face Detection', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            resized_image = cv2.resize(image, (screen_width, screen_height))
+            cv2.imshow('MediaPipe Face Detection', resized_image)
+
+        cap.release()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process video with emotion detection.')
     parser.add_argument('--file', help='Path to video file')
-    parser.add_argument('--rtsp-url', help='RTSP URL')
+    parser.add_argument('--rtsp-urls', nargs='+', type=str, help='RTSP URLs')
     parser.add_argument('--skip-frame', type=int, default=1, help='Number of frames to skip before processing each frame')
     parser.add_argument('--timeout', type=int, default=9999999, help='Timeout in seconds to stop video processing')
     args = parser.parse_args()
 
     if args.file:
-        process_video('file', args.file, args.skip_frame, args.timeout)
-    elif args.rtsp_url:
-        process_video('rtsp', args.rtsp_url, args.skip_frame, args.timeout)
+        process_video([args.file], args.skip_frame, args.timeout)
+    elif args.rtsp_urls:
+        process_video(args.rtsp_urls, args.skip_frame, args.timeout)
     else:
-        process_video('webcam', None, args.skip_frame, args.timeout)
+        process_video(['webcam'], args.skip_frame, args.timeout)
