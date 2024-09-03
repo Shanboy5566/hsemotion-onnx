@@ -39,6 +39,15 @@ def check_connection(cap, video_source, max_retries=5, delay=1):
         cap = cv2.VideoCapture(video_source)
         retry += 1
 
+def get_color(emotion: str):
+    # Determine color based on emotion
+    if emotion == 'Neutral':
+        return (0, 255, 255)  # Yellow
+    elif emotion == 'Positive':
+        return (0, 255, 0)    # Green
+    elif emotion == 'Negative':
+        return (0, 0, 255)    # Red
+
 def process_video(video_sources, skip_frame=1, timeout=None):
     # Load CenterFace model
     print("Loading CenterFace model")
@@ -106,14 +115,15 @@ def process_video(video_sources, skip_frame=1, timeout=None):
                 scores = sadness_normalization(scores, sadness_id=6, offset=config.SADNESS_OFFSET)
                 emotion = np.argmax(scores)
                 emotion = emotion_recognizer.idx_to_class[emotion]
+                color = (0, 255, 0)    # Green
                 if config.EMOTION_TO_BRANCH:
-                    emotion = emotion_to_branch(emotion)
+                    emotion, color = emotion_to_branch(emotion)
 
-                cv2.rectangle(image, (x, y), (p, q), (0, 255, 0), 2)
+                cv2.rectangle(image, (x, y), (p, q), color, 2)
                 fontScale = 2
                 min_y = y if y >= 0 else 10
                 cv2.putText(image, f"{emotion}", (x, min_y), cv2.FONT_HERSHEY_PLAIN, fontScale=fontScale,
-                            color=(0, 255, 0), thickness=3)
+                            color=color, thickness=3)
 
             if cv2.waitKey(5) & 0xFF == ord("q"):
                 break
@@ -138,4 +148,4 @@ if __name__ == '__main__':
     elif args.rtsp_urls:
         process_video(args.rtsp_urls, args.skip_frame, args.timeout)
     else:
-        process_video(['webcam'], args.skip_frame, args.timeout)
+        process_video([0], args.skip_frame, args.timeout)
