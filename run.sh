@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# PROJECT="/Users/mac/Documents/hsemotion-onnx"
-# VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
-
-PROJECT="/Users/shanboy/Documents/project/hsemotion-onnx"
+PROJECT="/Users/mac/Documents/hsemotion-onnx"
 VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
+
+# PROJECT="/Users/shanboy/Documents/project/hsemotion-onnx"
+# VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
 
 export SADNESS_OFFSET=0.0
 # export MODEL_NAME="enet_b2_8_best"
@@ -26,13 +26,19 @@ cleanup
 trap cleanup SIGINT
 
 # Docker desktop
+cd $PROJECT
 echo "Starting Docker desktop..."
 open -a Docker
+
+while ! docker info > /dev/null 2>&1; do
+  echo "Waiting for Docker to start..."
+  sleep 2
+done
+
 docker compose up -d
 
 # FastAPI
 echo "Starting FastAPI server..."
-cd $PROJECT
 source py312/bin/activate || exit 1 \
 && cd api \
 && uvicorn main:app --reload >> backend.log &
