@@ -28,10 +28,7 @@ trap cleanup SIGINT
 # Docker desktop
 echo "Starting Docker desktop..."
 open -a Docker
-
-# MongoDB
-echo "Starting MongoDB..."
-docker restart mongodb
+docker compose up -d
 
 # FastAPI
 echo "Starting FastAPI server..."
