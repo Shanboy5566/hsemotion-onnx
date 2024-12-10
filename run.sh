@@ -1,10 +1,10 @@
 #!/bin/bash
 
-PROJECT="/Users/mac/Documents/hsemotion-onnx"
-VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
-
-# PROJECT="/Users/shanboy/Documents/project/hsemotion-onnx"
+# PROJECT="/Users/mac/Documents/hsemotion-onnx"
 # VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
+
+PROJECT="/Users/shanboy/Documents/project/hsemotion-onnx"
+VIDEO_PATH="/Users/mac/Documents/mpv_ctrl/0802.mov"
 
 export SADNESS_OFFSET=0.0
 # export MODEL_NAME="enet_b2_8_best"
@@ -25,9 +25,9 @@ cleanup
 # Set trap to catch SIGINT (Ctrl + C) and run cleanup function
 trap cleanup SIGINT
 
-# Orbstack
-echo "Starting Orbstack server..."
-orb start
+# Docker desktop
+echo "Starting Docker desktop..."
+open -a Docker
 
 # MongoDB
 echo "Starting MongoDB..."
